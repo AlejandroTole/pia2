@@ -110,7 +110,10 @@ class MT5Broker(BrokerInterface):
             ):
                 self.disconnect()
                 return False
-            if getattr(info, "stops_level", None) is None or getattr(info, "freeze_level", None) is None:
+            if (
+                getattr(info, "trade_stops_level", None) is None
+                or getattr(info, "trade_freeze_level", None) is None
+            ):
                 self.disconnect()
                 return False
 

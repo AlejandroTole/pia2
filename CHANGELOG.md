@@ -2,6 +2,13 @@
 
 ---
 
+## 2026-10-02
+
+### Corrección de conexión MT5
+
+- `MT5Broker.connect()` ahora valida la metadata con los atributos reales `trade_stops_level` y `trade_freeze_level` de MetaTrader5.
+- Se actualizó el mock de MT5 y pasaron las 2 pruebas focalizadas; conexión local verificada con cuenta demo y los cinco símbolos.
+
 ## 2026-10-01
 
 ### FASE 5 — Broker simulado y compatibilidad de flujo

@@ -41,10 +41,9 @@ class FakeMT5:
                 volume_max=10.0,
                 volume_step=0.01,
                 trade_stops_level=30,
+                trade_freeze_level=10,
                 filling_mode=self.ORDER_FILLING_FOK,
                 trade_mode=self.ACCOUNT_TRADE_MODE_DEMO,
-                stops_level=30,
-                freeze_level=10,
             )
         }
 
