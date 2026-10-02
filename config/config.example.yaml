@@ -1,0 +1,134 @@
+# =====================================================================
+# PIA 2.0 - Configuración principal
+# ---------------------------------------------------------------------
+# TODO lo operativo se cambia AQUÍ, sin tocar código.
+# Copia este archivo a "config/config.yaml" y edítalo.
+# Las credenciales (MT5, Telegram) van en el archivo .env, NO aquí.
+# =====================================================================
+
+# Ejes de seguridad:
+#   simulated -> no envía órdenes
+#   broker    -> puede enviar órdenes, pero exige el tipo de cuenta indicado
+execution: simulated
+account_type_required: demo
+# Campo heredado, mantenido para compatibilidad con configuraciones v1.
+mode: demo
+
+# Instrumentos a vigilar. Para agregar/quitar uno, edita esta lista. Sin tocar código.
+symbols:
+  - EURUSD
+  - GBPUSD
+  - USDCAD
+  - USDJPY
+  - XAUUSD
+
+# Sufijo que algunos brokers agregan a los símbolos (ej. "EURUSD.PRO").
+# Si tu broker no usa sufijo, déjalo vacío ("").
+symbol_suffix: ".PRO"
+
+# Timeframe de decisión (day trading). Opciones: M1, M5, M15, M30, H1, H4, D1
+timeframe: M15
+entry_timeframe: M5
+candles: 300
+
+# Número mágico para identificar las órdenes de PIA en MT5.
+magic_number: 999999
+deviation: 50
+
+# -------------------------- RIESGO --------------------------
+risk:
+  risk_per_trade_pct: 0.5      # % del balance arriesgado por operación
+  max_daily_loss_pct: 3.0      # si se pierde esto en un día, PIA se detiene hasta mañana
+  max_drawdown_pct: 10.0       # drawdown máximo -> pausa total y aviso
+  max_trades_per_day: 8        # tope de operaciones por día
+  max_open_positions: 1        # posiciones simultáneas máximas (límite global de cuenta)
+  max_same_currency_exposure: 1 # máximo de posiciones con la misma exposición monetaria
+  min_confidence: 60           # confianza mínima de la IA para operar
+  max_spread_points:
+    EURUSD: 30
+    GBPUSD: 35
+    USDCAD: 35
+    USDJPY: 35
+    XAUUSD: 50
+  max_margin_per_trade_usd: 500  # Freno de seguridad: margen estimado máximo por trade
+  block_symbol_stacking: true  # evita abrir otra operación del mismo símbolo si ya hay una abierta
+  cooldown_minutes_after_loss: 120  # tras pérdida, no reentrar mismo símbolo/dirección por 2h
+
+# -------------------------- HORARIO --------------------------
+schedule:
+  timezone: America/Toronto
+  # Ventanas horarias en que PIA puede operar (hora local de 'timezone').
+  # Por defecto: solape Londres-NY.
+  sessions:
+    - start: "08:00"
+      end: "22:00"
+  trade_days: [Mon, Tue, Wed, Thu, Fri]
+
+# -------------------------- INDICADORES / SETUP --------------------------
+indicators:
+  ema_fast: 50
+  ema_slow: 200
+  rsi_period: 14
+  atr_period: 14
+  atr_sl_multiplier: 2.0       # distancia de Stop Loss = ATR * este valor
+  atr_tp_multiplier: 4.0       # distancia de Take Profit = ATR * este valor
+
+# -------------------------- CONFLUENCIA --------------------------
+confluence:
+  min_score: 45                # score final (0-100) para aprobar una operación
+  decision_engine_weight: 0.4  # peso del DecisionEngine en el ensemble (resto = ConfluenceAgent)
+
+# -------------------------- VELAS (FILTRO DE DECISIÓN) --------------------------
+candle_policy:
+  enabled: true
+  min_strength: 50             # fuerza mínima de patrón para influir en la decisión
+  conflict_penalty: 15         # resta de confianza cuando velas contradicen la señal IA
+  aligned_boost: 8             # suma de confianza cuando velas confirman la señal IA
+  veto_strength: 80            # si contradice y supera este nivel, fuerza WAIT
+
+# -------------------------- NOTICIAS (GRATIS, SIN API PAGA) --------------------------
+news:
+  enabled: true
+  use_filter: true
+  use_confidence_adjustment: true
+  refresh_minutes: 30
+  historical_lookback_days: 365
+  calendar_scan_days: 2        # limita scraping por ciclo para no bloquear inicio
+  reaction_windows_minutes: [15, 60, 240]  # +15m, +1h, +4h
+  min_pattern_events: 30
+  block_high_before_minutes: 20
+  block_high_after_minutes: 45
+  block_medium_enabled: false
+  block_medium_before_minutes: 10
+  block_medium_after_minutes: 20
+  confidence_boost_aligned: 6
+  confidence_penalty_conflict: 10
+  rss_urls:
+    - https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best
+    - https://www.fxstreet.com/rss/news
+  manual_events: []
+
+# -------------------------- INTELIGENCIA HISTÓRICA --------------------------
+historical:
+  min_patterns: 15
+  rsi_tolerance: 10
+  min_future_move_atr_ratio: 0.3
+
+# -------------------------- IA (LLM LOCAL) --------------------------
+ai:
+  provider: ollama
+  model: qwen2.5:7b
+  base_url: http://localhost:11434
+  timeout_seconds: 180
+  port: 11434
+
+# -------------------------- LOOP AUTÓNOMO --------------------------
+loop:
+  poll_seconds: 20             # cada cuánto revisa si cerró una vela nueva
+  reconnect_seconds: 15        # espera antes de reintentar conexión a MT5
+
+# -------------------------- OBSERVABILIDAD EN CONSOLA --------------------------
+observability:
+  log_level: INFO              # QUIET | INFO | DEBUG
+  heartbeat_seconds: 30        # cada cuánto imprime estado general del loop
+  show_symbol_summary: true    # resumen compacto por símbolo

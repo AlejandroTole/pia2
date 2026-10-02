@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Credenciales y configuración local
+.env
+config/config.yaml
+
+# Datos, logs y runtime
+*.db
+*.sqlite
+*.sqlite3
+data/runtime/
+logs/
+*.log
+
+# Herramientas
+.pytest_cache/
+.coverage
+.vscode/

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pia2"
+version = "2.0.0"
+description = "PIA 2.0 - Agente autónomo de day trading sobre MetaTrader 5"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+include = ["pia2*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
