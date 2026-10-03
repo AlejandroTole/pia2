@@ -4,6 +4,14 @@
 
 ## 2026-10-03
 
+### Backtest walk-forward y limpieza
+
+- Se eliminó `pia2-fixes.patch`, se corrigió la raíz del CLI y se actualizó la sección de backtest del README.
+- Se añadió walk-forward multifold con límites OOS y equity agregado; las salidas simuladas quedan dentro de la ventana de evaluación.
+- Los tests del constructor histórico cargan la configuración de ejemplo y no dependen de `config.yaml` local.
+
+## 2026-10-03
+
 ### Correcciones de calendario, kill switch y fecha de riesgo
 
 - Las horas de ForexFactory se interpretan en `America/New_York` y se convierten a UTC, con timezone de origen configurable.

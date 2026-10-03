@@ -57,11 +57,21 @@ python app.py             # punto de entrada alternativo (lee config/config.yaml
 
 ### Backtest histórico
 
+Los features se leen desde `data/historical/features/*.json`.
+
 ```bash
-python backtesting/historical_backtest.py \
-  --features-json backtesting/features_eurusd_m15.json \
-  --symbol EURUSD --timeframe M15 \
+python -m pia2.backtesting.historical_backtest \
+  --symbols EURUSD.PRO --balance 10000 --limits 3 4 6 \
   --spread-points 20 --commission-per-lot 3.5 --slippage-points 10
+```
+
+Para walk-forward multifold (recomendado: `--folds 5`), `--train-ratio`
+reserva la fracción inicial exclusivamente para entrenamiento. El resto se
+divide en ventanas contiguas; cada fold entrena con los datos anteriores a su
+ventana y evalúa solo dentro de ella, sin usar velas posteriores al límite.
+
+```bash
+python -m pia2.backtesting.historical_backtest --symbols EURUSD.PRO --folds 5
 ```
 
 **Alcance honesto:** el backtest reutiliza la lógica real de `RiskGuard`,

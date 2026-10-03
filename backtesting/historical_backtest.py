@@ -28,7 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
@@ -81,6 +81,8 @@ class ScenarioResult:
     average_trades_per_day: float = 0.0
     symbols: dict[str, int] | None = None
     trades_by_day: dict[str, int] | None = None
+    # Curva de equity del escenario (para agregación walk-forward).
+    equity_curve: list[float] = field(default_factory=list)
 
 
 @dataclass
@@ -350,10 +352,22 @@ def simulate_exit(
     direction: str,
     stop_loss: float,
     take_profit: float,
+    test_until: datetime | None = None,
 ) -> tuple[datetime, float]:
     """Resuelve SL/TP con velas posteriores, priorizando SL en empate."""
-    last_row = frame.iloc[min(entry_index + 4, len(frame) - 1)]
-    for index in range(entry_index + 1, min(entry_index + 5, len(frame))):
+    last_index = min(entry_index + 4, len(frame) - 1)
+    if test_until is not None:
+        if test_until.tzinfo is None:
+            test_until = test_until.replace(tzinfo=timezone.utc)
+        while last_index > entry_index:
+            row_time = pd.Timestamp(frame.iloc[last_index]["time"]).to_pydatetime()
+            if row_time.tzinfo is None:
+                row_time = row_time.replace(tzinfo=timezone.utc)
+            if row_time < test_until:
+                break
+            last_index -= 1
+
+    for index in range(entry_index + 1, last_index + 1):
         row = frame.iloc[index]
         high = float(row["high"])
         low = float(row["low"])
@@ -367,6 +381,7 @@ def simulate_exit(
                 return row["time"].to_pydatetime(), stop_loss
             if low <= take_profit:
                 return row["time"].to_pydatetime(), take_profit
+    last_row = frame.iloc[last_index]
     return last_row["time"].to_pydatetime(), float(last_row["close"])
 
 
@@ -395,7 +410,16 @@ def run_scenario(
     commission_per_lot: float = 0.0,
     slippage_points: float = 0.0,
     train_ratio: float = 0.7,
+    train_until: datetime | None = None,
+    test_until: datetime | None = None,
 ) -> ScenarioResult:
+    """Ejecuta un escenario de backtest sobre una ventana temporal.
+
+    - `train_ratio`: fracción inicial reservada para entrenamiento cuando
+      no se proporciona `train_until`.
+    - `train_until`: inicio explícito de la ventana de evaluación.
+    - `test_until`: fin exclusivo de la ventana de evaluación.
+    """
     risk_cfg = replace(config.risk, max_trades_per_day=max_trades_per_day)
     guard = RiskGuard(risk_cfg)
     # En live, el tope de margen estimado actúa como freno de seguridad.
@@ -410,7 +434,12 @@ def run_scenario(
     event_stream.sort(key=lambda item: (item[0], item[1]))
 
     if not event_stream:
-        return ScenarioResult(max_trades_per_day=max_trades_per_day, symbols={}, trades_by_day={})
+        return ScenarioResult(
+            max_trades_per_day=max_trades_per_day,
+            symbols={},
+            trades_by_day={},
+            equity_curve=[starting_balance],
+        )
 
     pattern_indices = {
         symbol: PatternRuntimeIndex(config.historical.rsi_tolerance)
@@ -422,7 +451,14 @@ def run_scenario(
         first_time = first_time.replace(tzinfo=timezone.utc)
     guard.start_day(first_time.date(), starting_balance)
     last_time = event_stream[-1][0].to_pydatetime()
-    train_until = first_time + (last_time - first_time) * train_ratio
+    if last_time.tzinfo is None:
+        last_time = last_time.replace(tzinfo=timezone.utc)
+    if train_until is None:
+        train_until = first_time + (last_time - first_time) * train_ratio
+    if train_until.tzinfo is None:
+        train_until = train_until.replace(tzinfo=timezone.utc)
+    if test_until is not None and test_until.tzinfo is None:
+        test_until = test_until.replace(tzinfo=timezone.utc)
 
     open_trades: list[OpenTrade] = []
     executed_trades: list[OpenTrade] = []
@@ -438,6 +474,9 @@ def run_scenario(
         current_time = event_time.to_pydatetime()
         if current_time.tzinfo is None:
             current_time = current_time.replace(tzinfo=timezone.utc)
+        # Los eventos del límite pertenecen al siguiente fold.
+        if test_until is not None and current_time >= test_until:
+            break
 
         # Cierra trades que ya llegaron a su barra de salida.
         open_trades, balance = maybe_close_trades(
@@ -538,7 +577,12 @@ def run_scenario(
         else:
             entry_price -= spread_price / 2 + slippage_price
         exit_time, exit_price = simulate_exit(
-            frame, index, decision.signal, setup.stop_loss, setup.take_profit
+            frame,
+            index,
+            decision.signal,
+            setup.stop_loss,
+            setup.take_profit,
+            test_until=test_until,
         )
         profit = money_profit(spec, decision.signal, entry_price, exit_price, sizing.volume)
         profit -= commission_per_lot * sizing.volume
@@ -612,6 +656,181 @@ def run_scenario(
         average_trades_per_day=round(average_trades_per_day, 2),
         symbols=dict(symbol_counter),
         trades_by_day=dict(trades_by_day),
+        equity_curve=equity_curve,
+    )
+
+
+@dataclass
+class WalkForwardFold:
+    """Un fold de validación walk-forward: ventana OOS y su resultado."""
+
+    index: int
+    test_start: datetime
+    test_end: datetime
+    result: ScenarioResult
+
+
+@dataclass
+class WalkForwardResult:
+    """Agregado out-of-sample de todos los folds.
+
+    Cada fold se evalúa con el mismo balance inicial, por lo que el
+    `net_profit` agregado es la suma del P/L fuera de muestra. El drawdown
+    concatena las curvas de equity de cada fold en orden cronológico.
+    """
+
+    n_folds: int
+    train_ratio: float
+    max_trades_per_day: int
+    folds: list[WalkForwardFold] = field(default_factory=list)
+    total_trades: int = 0
+    wins: int = 0
+    losses: int = 0
+    breakeven: int = 0
+    net_profit: float = 0.0
+    gross_profit: float = 0.0
+    gross_loss: float = 0.0
+    profit_factor: float | None = None
+    win_rate: float = 0.0
+    expectancy_per_trade: float = 0.0
+    max_drawdown_pct: float = 0.0
+    folds_profitable: int = 0
+
+
+def run_walk_forward(
+    frames_by_symbol: dict[str, pd.DataFrame],
+    config,
+    max_trades_per_day: int,
+    starting_balance: float,
+    spread_points: float = 0.0,
+    commission_per_lot: float = 0.0,
+    slippage_points: float = 0.0,
+    train_ratio: float = 0.7,
+    n_folds: int = 5,
+    min_test_events: int = 10,
+) -> WalkForwardResult:
+    """Validación walk-forward multifold sobre los features históricos.
+
+    La fracción inicial `train_ratio` se reserva para entrenamiento. El resto
+    se divide en ventanas OOS cronológicas; cada fold entrena con todos los
+    datos anteriores y evalúa solo dentro de su ventana.
+    """
+    if n_folds < 1:
+        raise ValueError("n_folds debe ser >= 1")
+
+    times: list[datetime] = []
+    for frame in frames_by_symbol.values():
+        for timestamp in frame["time"]:
+            moment = pd.Timestamp(timestamp).to_pydatetime()
+            if moment.tzinfo is None:
+                moment = moment.replace(tzinfo=timezone.utc)
+            times.append(moment)
+    times.sort()
+    if not times:
+        raise ValueError("Sin eventos para walk-forward")
+
+    first_time = times[0]
+    last_time = times[-1]
+    oos_start = first_time + (last_time - first_time) * train_ratio
+    # Keep equal timestamps in the same fold so test windows are disjoint.
+    oos_times = sorted({moment for moment in times if moment >= oos_start})
+    if len(oos_times) < n_folds * min_test_events:
+        raise ValueError(
+            f"Datos OOS insuficientes: {len(oos_times)} eventos para {n_folds} folds "
+            f"(mínimo {min_test_events} eventos por fold)"
+        )
+
+    chunk_size, remainder = divmod(len(oos_times), n_folds)
+    folds: list[WalkForwardFold] = []
+    start_idx = 0
+    for index in range(n_folds):
+        end_idx = start_idx + chunk_size + (1 if index < remainder else 0)
+        chunk = oos_times[start_idx:end_idx]
+        test_start = chunk[0]
+        test_until = oos_times[end_idx] if end_idx < len(oos_times) else None
+        result = run_scenario(
+            frames_by_symbol,
+            config,
+            max_trades_per_day,
+            starting_balance,
+            spread_points=spread_points,
+            commission_per_lot=commission_per_lot,
+            slippage_points=slippage_points,
+            train_until=test_start,
+            test_until=test_until,
+        )
+        folds.append(
+            WalkForwardFold(
+                index=index + 1,
+                test_start=test_start,
+                test_end=chunk[-1],
+                result=result,
+            )
+        )
+        start_idx = end_idx
+
+    total_trades = sum(fold.result.total_trades for fold in folds)
+    wins = sum(fold.result.wins for fold in folds)
+    losses = sum(fold.result.losses for fold in folds)
+    breakeven = sum(fold.result.breakeven for fold in folds)
+    net_profit = round(sum(fold.result.net_profit for fold in folds), 2)
+    gross_profit = round(sum(fold.result.gross_profit for fold in folds), 2)
+    gross_loss = round(sum(fold.result.gross_loss for fold in folds), 2)
+    profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else None
+    win_rate = round((wins / total_trades) * 100.0, 2) if total_trades else 0.0
+
+    combined = [starting_balance]
+    for fold in folds:
+        for value in fold.result.equity_curve[1:]:
+            combined.append(combined[-1] + (value - starting_balance))
+    peak = combined[0]
+    max_drawdown = 0.0
+    for value in combined[1:]:
+        peak = max(peak, value)
+        if peak > 0:
+            max_drawdown = max(max_drawdown, ((peak - value) / peak) * 100.0)
+
+    return WalkForwardResult(
+        n_folds=n_folds,
+        train_ratio=train_ratio,
+        max_trades_per_day=max_trades_per_day,
+        folds=folds,
+        total_trades=total_trades,
+        wins=wins,
+        losses=losses,
+        breakeven=breakeven,
+        net_profit=net_profit,
+        gross_profit=gross_profit,
+        gross_loss=gross_loss,
+        profit_factor=profit_factor,
+        win_rate=win_rate,
+        expectancy_per_trade=round(net_profit / total_trades, 2) if total_trades else 0.0,
+        max_drawdown_pct=round(max_drawdown, 2),
+        folds_profitable=sum(1 for fold in folds if fold.result.net_profit > 0),
+    )
+
+
+def print_walk_forward(result: WalkForwardResult, starting_balance: float) -> None:
+    print(
+        f"Walk-forward: {result.n_folds} folds | train_ratio={result.train_ratio} | "
+        f"max_trades_per_day={result.max_trades_per_day} | balance={starting_balance:.2f}"
+    )
+    print(" fold | test_window                        | trades | win_rate |      net |    pf  |   dd%")
+    for fold in result.folds:
+        scenario = fold.result
+        profit_factor = scenario.profit_factor if scenario.profit_factor is not None else "n/a"
+        window = f"{fold.test_start:%Y-%m-%d %H:%M} -> {fold.test_end:%Y-%m-%d %H:%M}"
+        print(
+            f"  {fold.index:>2}  | {window} | {scenario.total_trades:>6} | "
+            f"{scenario.win_rate:>7.2f}% | {scenario.net_profit:>8.2f} | "
+            f"{profit_factor!s:>6} | {scenario.max_drawdown_pct:>6.2f}%"
+        )
+    profit_factor = result.profit_factor if result.profit_factor is not None else "n/a"
+    print(
+        f"AGREGADO OOS | trades={result.total_trades} | win_rate={result.win_rate:.2f}% | "
+        f"net={result.net_profit:.2f} | pf={profit_factor} | dd={result.max_drawdown_pct:.2f}% | "
+        f"folds+={result.folds_profitable}/{result.n_folds} | "
+        f"exp/trade={result.expectancy_per_trade:.2f}"
     )
 
 
@@ -679,12 +898,20 @@ def parse_args() -> argparse.Namespace:
         default=0.7,
         help="Fracción inicial reservada para entrenamiento walk-forward.",
     )
+    parser.add_argument(
+        "--folds",
+        type=int,
+        default=1,
+        help="Folds walk-forward OOS. 1 = split único clásico; >= 2 = multifold.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    project_root = Path(__file__).resolve().parents[2]
+    # La raíz del repo ES el paquete pia2 (no hay subdirectorio pia2/):
+    # este archivo está en <root>/backtesting/, así que parents[1] es la raíz.
+    project_root = Path(__file__).resolve().parents[1]
     config = load_config(project_root / "config" / "config.yaml")
 
     frames = load_frames(project_root, args.symbols or config.broker_symbols())
@@ -701,20 +928,49 @@ def main() -> int:
     print("".ljust(120, "-"))
 
     results = []
+    walk_forward_results = []
     for limit in args.limits:
         scenario_config = replace(config, risk=replace(config.risk, max_trades_per_day=limit))
-        result = run_scenario(
-            frames,
-            scenario_config,
-            limit,
-            args.balance,
-            spread_points=args.spread_points,
-            commission_per_lot=args.commission_per_lot,
-            slippage_points=args.slippage_points,
-            train_ratio=args.train_ratio,
+        if args.folds <= 1:
+            result = run_scenario(
+                frames,
+                scenario_config,
+                limit,
+                args.balance,
+                spread_points=args.spread_points,
+                commission_per_lot=args.commission_per_lot,
+                slippage_points=args.slippage_points,
+                train_ratio=args.train_ratio,
+            )
+            results.append(result)
+            print_result(result)
+        else:
+            walk_forward = run_walk_forward(
+                frames,
+                scenario_config,
+                limit,
+                args.balance,
+                spread_points=args.spread_points,
+                commission_per_lot=args.commission_per_lot,
+                slippage_points=args.slippage_points,
+                train_ratio=args.train_ratio,
+                n_folds=args.folds,
+            )
+            walk_forward_results.append(walk_forward)
+            print_walk_forward(walk_forward, args.balance)
+            print("".ljust(120, "-"))
+
+    if walk_forward_results:
+        best = max(
+            walk_forward_results,
+            key=lambda item: (item.net_profit, -item.max_drawdown_pct, item.win_rate),
         )
-        results.append(result)
-        print_result(result)
+        print(
+            f"Mejor escenario WF: max_trades_per_day={best.max_trades_per_day} | "
+            f"net_OOS={best.net_profit:.2f} | win_rate={best.win_rate:.2f}% | "
+            f"dd={best.max_drawdown_pct:.2f}% | folds+={best.folds_profitable}/{best.n_folds}"
+        )
+        return 0
 
     best = max(results, key=lambda item: (item.net_profit, -item.max_drawdown_pct, item.win_rate))
     print("".ljust(120, "-"))

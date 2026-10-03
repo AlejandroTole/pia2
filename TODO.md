@@ -2,6 +2,7 @@
 
 ## Fases pre-demo
 
+- [x] Corregir raíz del CLI de backtest, hacer tests del feature builder independientes de `config.yaml` y añadir walk-forward multifold; verificado con `pytest tests/ -q`.
 - [x] Corregir timezone de ForexFactory, ruta del kill switch `STOP` y fecha local usada por RiskGuard; `pytest tests/ -q` pasó.
 - [x] FASE 0: seguridad de cuenta, `.env`, kill switch y base separada por cuenta.
 - [x] FASE 1: corregir bugs que invalidan la prueba.
