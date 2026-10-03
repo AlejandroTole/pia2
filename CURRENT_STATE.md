@@ -16,7 +16,8 @@ Estado operativo reciente:
 
 - ForexFactory interpreta sus horas en `America/New_York` y las convierte a UTC; el timezone de origen es configurable.
 - El kill switch `STOP` se resuelve en la raíz del repositorio y RiskGuard recibe la fecha local de su zona horaria configurada.
-- Se retiró el patch accidental del repositorio y el backtest ahora ofrece evaluación walk-forward multifold con ventanas OOS acotadas.
+- Se retiró el patch accidental del repositorio y el backtest ahora ofrece evaluación walk-forward multifold con ventanas OOS acotadas y drawdown agregado por cambios de equity.
+- La confianza del backtest ahora usa significancia z-score del split BUY/SELL, calibrada a `min_confidence` y registra el z-score en el motivo de la señal.
 - FASE 0 de seguridad completada para preparar la prueba demo.
 - FASE 1 de integridad de prueba completada.
 - FASE 2 de ejecución MT5 validada en regresión: selección de símbolos, validación de metadata y flujo de `order_check`/`order_send` con `deviation` configurado.

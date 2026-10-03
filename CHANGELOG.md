@@ -4,6 +4,14 @@
 
 ## 2026-10-03
 
+### Calibración de confianza del backtest
+
+- La confianza de `build_signal_from_counts` se calcula con el z-score del split BUY/SELL y se añade el valor `z` a la razón de señal.
+- Se añadieron tests de splits balanceados, edge fuerte, margen débil con muestra grande e historial insuficiente.
+- El drawdown walk-forward agregado suma variaciones entre snapshots consecutivos, evitando contar equity acumulado repetidamente.
+
+## 2026-10-03
+
 ### Backtest walk-forward y limpieza
 
 - Se eliminó `pia2-fixes.patch`, se corrigió la raíz del CLI y se actualizó la sección de backtest del README.

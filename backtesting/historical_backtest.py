@@ -16,6 +16,9 @@ Limitaciones conocidas (leer antes de confiar en un resultado):
   XAU) porque los JSON no contienen las specs del broker.
 - Los costos (spread/slippage/comisión) tienen defaults realistas pero son
     aproximados; si el JSON trae columna "spread" por fila, esa manda.
+- La confianza del backtest es `min(100, |z|*30)` sobre el split BUY/SELL
+    (significancia estadística, no margen crudo), calibrada para que `|z|=2`
+    equivalga a `min_confidence=60`.
 
 Uso:
     python -m pia2.backtesting.historical_backtest
@@ -27,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
@@ -244,13 +248,18 @@ def build_signal_from_counts(
     sell_probability = (sells / total) * 100.0
 
     signal = "BUY" if buy_probability > sell_probability else "SELL"
-    base_confidence = abs(buy_probability - sell_probability)
+    # El margen crudo no discrimina bien buckets grandes; usa significancia
+    # estadística frente a un split 50/50 y calibra |z|=2 a confianza 60.
+    p = buys / total if total > 0 else 0.5
+    z = (p - 0.5) / math.sqrt(0.25 / total) if total > 0 else 0.0
+    base_confidence = min(100.0, abs(z) * 30.0)
     confidence = apply_adaptive_confidence(base_confidence, symbol_stats)
     return SignalDecision(
         signal=signal,
         confidence=round(confidence, 2),
         reason=(
-            f"{total} matches | BUY={buy_probability:.2f}% | SELL={sell_probability:.2f}%"
+            f"{total} matches | BUY={buy_probability:.2f}% | "
+            f"SELL={sell_probability:.2f}% | z={z:+.2f}"
         ),
     )
 
@@ -781,8 +790,10 @@ def run_walk_forward(
 
     combined = [starting_balance]
     for fold in folds:
+        previous_equity = starting_balance
         for value in fold.result.equity_curve[1:]:
-            combined.append(combined[-1] + (value - starting_balance))
+            combined.append(combined[-1] + (value - previous_equity))
+            previous_equity = value
     peak = combined[0]
     max_drawdown = 0.0
     for value in combined[1:]:

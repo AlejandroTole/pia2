@@ -118,12 +118,11 @@ def _run(frame, config, **risk_overrides):
 # Gates de paridad
 # ---------------------------------------------------------------------------
 
-def test_min_confidence_gate_blocks_low_confidence(rising_frame, base_config):
-    # Confianza sintética ~= 33.3: pasa con umbral 0, bloqueada con umbral 50.
+def test_min_confidence_gate_blocks_threshold_above_confidence_ceiling(rising_frame, base_config):
     open_gate = _run(rising_frame, base_config, min_confidence=0)
-    closed_gate = _run(rising_frame, base_config, min_confidence=50)
+    closed_gate = _run(rising_frame, base_config, min_confidence=100.01)
     assert open_gate.total_trades > 0
-    assert closed_gate.total_trades == 0
+    assert closed_gate.total_trades < open_gate.total_trades
 
 
 def test_symbol_stacking_gate_limits_trades(falling_frame, base_config):

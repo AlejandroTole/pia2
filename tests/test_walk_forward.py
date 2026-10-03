@@ -75,6 +75,7 @@ def test_fold_windows_are_ordered_and_disjoint(frame, config):
     assert result.wins == sum(fold.result.wins for fold in result.folds)
     assert result.losses == sum(fold.result.losses for fold in result.folds)
     assert result.net_profit == round(sum(fold.result.net_profit for fold in result.folds), 2)
+    assert 0.0 <= result.max_drawdown_pct < 100.0
     assert result.folds_profitable == sum(
         1 for fold in result.folds if fold.result.net_profit > 0
     )
