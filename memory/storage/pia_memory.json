@@ -5,5 +5,47 @@
         "confidence": 65,
         "risk": 0.5,
         "timestamp": "2026-10-01 13:20:26"
+    },
+    {
+        "symbol": "GBPUSD.PRO",
+        "signal": "BUY",
+        "confidence": 65,
+        "risk": 0.5,
+        "timestamp": "2026-10-03 11:07:43"
+    },
+    {
+        "symbol": "GBPUSD.PRO",
+        "signal": "BUY",
+        "confidence": 65,
+        "risk": 0.5,
+        "timestamp": "2026-10-03 11:09:08"
+    },
+    {
+        "symbol": "GBPUSD.PRO",
+        "signal": "BUY",
+        "confidence": 65,
+        "risk": 0.5,
+        "timestamp": "2026-10-03 11:10:56"
+    },
+    {
+        "symbol": "GBPUSD.PRO",
+        "signal": "BUY",
+        "confidence": 65,
+        "risk": 0.5,
+        "timestamp": "2026-10-03 14:12:18"
+    },
+    {
+        "symbol": "GBPUSD.PRO",
+        "signal": "BUY",
+        "confidence": 65,
+        "risk": 0.5,
+        "timestamp": "2026-10-03 14:42:29"
+    },
+    {
+        "symbol": "GBPUSD.PRO",
+        "signal": "BUY",
+        "confidence": 65,
+        "risk": 0.5,
+        "timestamp": "2026-10-03 14:44:07"
     }
 ]
