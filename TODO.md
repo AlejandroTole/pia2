@@ -2,6 +2,7 @@
 
 ## Fases pre-demo
 
+- [x] Corregir timezone de ForexFactory, ruta del kill switch `STOP` y fecha local usada por RiskGuard; `pytest tests/ -q` pasó.
 - [x] FASE 0: seguridad de cuenta, `.env`, kill switch y base separada por cuenta.
 - [x] FASE 1: corregir bugs que invalidan la prueba.
 - [x] FASE 2: validación de ejecución MT5 en regresión (`symbol_select`, metadata del símbolo, `order_check`, `deviation` y `filling_mode`).

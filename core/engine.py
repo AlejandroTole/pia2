@@ -388,7 +388,7 @@ class TradingEngine:
         )
 
         guard_decision = self.guard.can_open_trade(
-            today=now.date(),
+            today=self.guard.local_date(now),
             balance=account.balance,
             equity=account.equity,
             open_positions=open_positions,

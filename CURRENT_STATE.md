@@ -4,7 +4,7 @@
 
 Septiembre 2026
 
-Actualizado: 2026-10-01
+Actualizado: 2026-10-03
 
 ---
 
@@ -14,6 +14,8 @@ PIA se encuentra en fase inicial de construcción de arquitectura multi-agente.
 
 Estado operativo reciente:
 
+- ForexFactory interpreta sus horas en `America/New_York` y las convierte a UTC; el timezone de origen es configurable.
+- El kill switch `STOP` se resuelve en la raíz del repositorio y RiskGuard recibe la fecha local de su zona horaria configurada.
 - FASE 0 de seguridad completada para preparar la prueba demo.
 - FASE 1 de integridad de prueba completada.
 - FASE 2 de ejecución MT5 validada en regresión: selección de símbolos, validación de metadata y flujo de `order_check`/`order_send` con `deviation` configurado.

@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from xml.etree import ElementTree as ET
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -45,8 +46,9 @@ _BEARISH_KEYWORDS = ("misses", "weak", "falls", "dovish", "recession")
 
 
 class NewsCollector:
-    def __init__(self, timeout: int = 20):
+    def __init__(self, timeout: int = 20, source_tz: str = "America/New_York"):
         self.timeout = timeout
+        self.source_tz = source_tz
 
     def fetch_rss(self, urls: list[str], symbols: list[str]) -> list[NewsEvent]:
         events: list[NewsEvent] = []
@@ -121,7 +123,7 @@ class NewsCollector:
                 if not time_txt or time_txt.lower() in {"all day", "tentative"}:
                     continue
 
-                published_at = _parse_day_time_utc(day, time_txt)
+                published_at = _parse_day_time_utc(day, time_txt, self.source_tz)
                 impact = "HIGH" if "high" in impact_txt.lower() else "MEDIUM"
                 sentiment = classify_sentiment(title)
                 affected = map_currency_to_symbols(currency, symbols)
@@ -248,14 +250,23 @@ def _extract_first(text: str, pattern: str) -> str:
     return m.group(1) if m else ""
 
 
-def _parse_day_time_utc(day, time_txt: str) -> datetime:
-    # Formatos observados: "8:30am", "10:00pm".
+def _parse_day_time_utc(
+    day, time_txt: str, source_tz: str = "America/New_York"
+) -> datetime:
     clean = time_txt.strip().lower().replace(" ", "")
     try:
         tm = datetime.strptime(clean, "%I:%M%p").time()
     except ValueError:
         return datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
-    return datetime(day.year, day.month, day.day, tm.hour, tm.minute, tzinfo=timezone.utc)
+    local = datetime(
+        day.year,
+        day.month,
+        day.day,
+        tm.hour,
+        tm.minute,
+        tzinfo=ZoneInfo(source_tz),
+    )
+    return local.astimezone(timezone.utc)
 
 
 def _parse_iso_datetime(value: str | datetime | None) -> datetime:

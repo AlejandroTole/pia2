@@ -23,6 +23,10 @@ from pia2.core.reconciler import reconcile
 from pia2.scheduling.clock import within_session
  
  
+def _default_stop_file() -> Path:
+    return Path(__file__).resolve().parents[1] / "STOP"
+
+
 class Orchestrator:
     def __init__(self, config, broker, engine: TradingEngine, store, guard, notifier):
         self.config = config
@@ -36,7 +40,7 @@ class Orchestrator:
         self._last_reconcile: datetime | None = None
         self._last_heartbeat: datetime | None = None
         self._tick_seq = 0
-        self._stop_file = Path(__file__).resolve().parents[2] / "STOP"
+        self._stop_file = _default_stop_file()
 
     def _kill_switch_active(self) -> bool:
         return self._stop_file.exists()

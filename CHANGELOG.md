@@ -2,6 +2,15 @@
 
 ---
 
+## 2026-10-03
+
+### Correcciones de calendario, kill switch y fecha de riesgo
+
+- Las horas de ForexFactory se interpretan en `America/New_York` y se convierten a UTC, con timezone de origen configurable.
+- El archivo `STOP` ahora apunta a la raíz del repositorio.
+- RiskGuard recibe la fecha calculada en la zona horaria configurada.
+- Se añadieron tests para timezone y seguridad; la suite completa pasó con `pytest tests/ -q`.
+
 ## 2026-10-02
 
 ### Corrección de conexión MT5
