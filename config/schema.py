@@ -78,6 +78,10 @@ class NewsConfig:
     enabled: bool = False
     use_filter: bool = True
     use_confidence_adjustment: bool = True
+    # Si True y el módulo de noticias falla (red, RSS, parseo), el ciclo sigue
+    # sin noticias (neutral) y el fallo queda visible en logs/observabilidad.
+    # Si False, el símbolo se omite en ese ciclo (fail-closed).
+    fail_open: bool = True
     refresh_minutes: int = 30
     historical_lookback_days: int = 365
     calendar_scan_days: int = 2

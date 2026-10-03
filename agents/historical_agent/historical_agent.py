@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from agents.historical_agent.feature_builder import HistoricalFeatureBuilder
-from pia2.agents.historical_agent.historical_intelligence import HistoricalIntelligence
+from .feature_builder import HistoricalFeatureBuilder
+from .historical_intelligence import HistoricalIntelligence
 
 
 class HistoricalAgent:
@@ -13,7 +13,7 @@ class HistoricalAgent:
 
     def build_memory(self, symbol: str, timeframe, candles: int = 50000):
         try:
-            from pia2.agents.historical_agent.multi_historical_builder import MultiHistoricalBuilder
+            from .multi_historical_builder import MultiHistoricalBuilder
             builder = MultiHistoricalBuilder(output_folder=self.feature_builder.output_folder)
             try:
                 return builder.download_symbol(symbol, candles=candles)

@@ -10,8 +10,9 @@ class FakeMT5:
     ORDER_TYPE_SELL = 1
     TRADE_ACTION_DEAL = 0
     ORDER_TIME_GTC = 0
-    ORDER_FILLING_FOK = 1
-    ORDER_FILLING_IOC = 3
+    ORDER_FILLING_FOK = 0
+    ORDER_FILLING_IOC = 1
+    SYMBOL_FILLING_FOK = 1
     TRADE_RETCODE_DONE = 10009
 
     def __init__(self):
@@ -42,7 +43,7 @@ class FakeMT5:
                 volume_step=0.01,
                 trade_stops_level=30,
                 trade_freeze_level=10,
-                filling_mode=self.ORDER_FILLING_FOK,
+                filling_mode=self.SYMBOL_FILLING_FOK,
                 trade_mode=self.ACCOUNT_TRADE_MODE_DEMO,
             )
         }

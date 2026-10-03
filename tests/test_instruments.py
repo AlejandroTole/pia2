@@ -63,4 +63,6 @@ def test_money_profit_loss():
 def test_normalize_volume_respects_step_and_min():
     spec = eurusd_spec()
     assert normalize_volume(spec, 0.004) == 0.01   # sube al mínimo
-    assert normalize_volume(spec, 0.126) == 0.13   # redondea al step
+    # Redondeo hacia ABAJO a propósito: el volumen normalizado nunca debe
+    # superar el riesgo calculado (ver docstring de normalize_volume).
+    assert normalize_volume(spec, 0.126) == 0.12

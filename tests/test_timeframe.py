@@ -1,4 +1,6 @@
-import MetaTrader5 as mt5
+import pytest
+
+mt5 = pytest.importorskip("MetaTrader5", reason="MetaTrader5 solo disponible en Windows")
 
 from agents.timeframe_agent.timeframe_agent import TimeFrameAgent
 

@@ -18,6 +18,7 @@ Estado operativo reciente:
 - FASE 1 de integridad de prueba completada.
 - FASE 2 de ejecución MT5 validada en regresión: selección de símbolos, validación de metadata y flujo de `order_check`/`order_send` con `deviation` configurado.
 - La conexión MT5 real fue reparada: `MT5Broker` valida `trade_stops_level` y `trade_freeze_level` usando los nombres expuestos por MetaTrader5; conexión verificada con cuenta demo y los cinco símbolos configurados.
+- Se aplicó `pia2-fixes.patch`: README e instalación editable, resolución de imports, selección de filling mode, política configurable ante fallos de noticias y paridad adicional de backtest; la suite completa pasó.
 - FASE 3 quedó completada en código y pruebas focalizadas: `agents.*` resuelve el paquete real del proyecto, el builder histórico ya no falla al importar sin MT5 ni depende de `pia2.config.settings` inexistente, ahora fabrica indicadores con la configuración cargada desde YAML, la regla determinista de referencia compara la decisión del LLM con EMA + RSI + patrón de velas y la capa de noticias admite eventos manuales estructurados desde YAML con timestamps ISO y zona horaria.
 - FASE 4 quedó habilitada en observabilidad: se guardan señales, órdenes y snapshots de cuenta en SQLite, el logger rota archivos en `logs/pia.log` y se añadió un notificador Telegram sin romper el modo demo cuando no hay token o chat configurados.
 - La conexión MT5 verifica tipo de cuenta y permisos antes de continuar.

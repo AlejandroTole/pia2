@@ -9,6 +9,12 @@
 - `MT5Broker.connect()` ahora valida la metadata con los atributos reales `trade_stops_level` y `trade_freeze_level` de MetaTrader5.
 - Se actualizó el mock de MT5 y pasaron las 2 pruebas focalizadas; conexión local verificada con cuenta demo y los cinco símbolos.
 
+### README, empaquetado y regresiones
+
+- Se añadió README e instalación editable del paquete; se corrigieron imports de agentes y se eligió `type_filling` desde los flags del símbolo.
+- Se añadió fail-open/fail-closed configurable para noticias y controles de paridad de backtest para spread, confianza, stacking y cooldown.
+- La suite completa pasó con `pytest tests -q`.
+
 ## 2026-10-01
 
 ### FASE 5 — Broker simulado y compatibilidad de flujo

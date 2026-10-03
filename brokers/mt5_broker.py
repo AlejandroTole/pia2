@@ -21,8 +21,32 @@ from pia2.brokers.base import (
     Tick,
 )
 from pia2.market.instruments import SymbolSpec, normalize_volume, round_price
- 
- 
+
+
+def select_filling_mode(mt5, filling_flags, trade_execution=None) -> int:
+    """Elige un modo de ejecución concreto a partir del bitmask del símbolo.
+
+    `symbol_info.filling_mode` es una máscara de bits (puede combinar varios
+    modos permitidos); en cambio `type_filling` del request necesita UN modo.
+    Los flags de símbolo son FOK=1 e IOC=2; los valores ORDER_FILLING son una
+    enumeración distinta. RETURN está permitido salvo en ejecución de mercado.
+    """
+    if filling_flags is None:
+        return mt5.ORDER_FILLING_IOC
+    try:
+        flags = int(filling_flags)
+    except (TypeError, ValueError):
+        return mt5.ORDER_FILLING_IOC
+    if flags & 1:
+        return mt5.ORDER_FILLING_FOK
+    if flags & 2:
+        return mt5.ORDER_FILLING_IOC
+    market_execution = getattr(mt5, "SYMBOL_TRADE_EXECUTION_MARKET", 2)
+    if trade_execution != market_execution:
+        return mt5.ORDER_FILLING_RETURN
+    return mt5.ORDER_FILLING_IOC
+
+
 class MT5Broker(BrokerInterface):
     def __init__(
         self,
@@ -264,9 +288,11 @@ class MT5Broker(BrokerInterface):
             if price - tp < min_dist:
                 tp = round_price(spec, price - min_dist)
 
-        filling_mode = getattr(info, "filling_mode", None)
-        if filling_mode is None:
-            filling_mode = mt5.ORDER_FILLING_IOC
+        filling_mode = select_filling_mode(
+            mt5,
+            getattr(info, "filling_mode", None),
+            getattr(info, "trade_exemode", None),
+        )
 
         request = {
             "action": mt5.TRADE_ACTION_DEAL,

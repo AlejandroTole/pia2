@@ -1,15 +1,21 @@
 """Backtest histórico basado en los features ya generados por PIA.
 
 Este módulo reusa la lógica operativa principal tanto como es posible con los
-datos históricos disponibles en `data/historical/features/*.json`.
+datos históricos disponibles en `data/historical/features/*.json`:
+build_trade_setup, analyze_candles (+candle policy), RiskGuard, RiskManager,
+within_session, min_confidence, block_symbol_stacking y cooldown post-loss.
 
-Limitaciones conocidas:
+Limitaciones conocidas (leer antes de confiar en un resultado):
 - No hay datos históricos de noticias en esos JSON, así que el filtro de
   noticias queda fuera del replay.
-- El backtest usa los patrones históricos por símbolo para construir la señal,
-  pero solo con información previa al punto actual para evitar lookahead.
+- La señal NO es la del LLM en vivo: aquí la genera el índice de patrones
+    históricos (misma idea que HistoricalIntelligence). El backtest valida el
+    pipeline determinista (setups, velas, riesgo, costos), NO el juicio del LLM.
+    Para validar una variante de estrategia, el LLM debe evaluarse aparte.
 - El cálculo de P/L usa las especificaciones inferidas del símbolo (FX / JPY /
   XAU) porque los JSON no contienen las specs del broker.
+- Los costos (spread/slippage/comisión) tienen defaults realistas pero son
+    aproximados; si el JSON trae columna "spread" por fila, esa manda.
 
 Uso:
     python -m pia2.backtesting.historical_backtest
@@ -23,7 +29,7 @@ import argparse
 import json
 from collections import Counter
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -286,6 +292,7 @@ def maybe_close_trades(
     guard: RiskGuard,
     symbol_stats_map: dict[str, SymbolStats],
     equity_curve: list[float],
+    last_loss_time: dict[tuple[str, str], datetime] | None = None,
 ) -> tuple[list[OpenTrade], float]:
     remaining: list[OpenTrade] = []
     for trade in open_trades:
@@ -303,6 +310,10 @@ def maybe_close_trades(
             stats.wins += 1
         elif trade.profit < 0:
             stats.losses += 1
+            # Paridad con live (cooldown post-loss): se registra la hora real
+            # de cierre, no la barra en que se detectó.
+            if last_loss_time is not None:
+                last_loss_time[(trade.symbol, trade.direction)] = trade.exit_time
 
     equity_curve.append(balance)
     return remaining, balance
@@ -359,6 +370,22 @@ def simulate_exit(
     return last_row["time"].to_pydatetime(), float(last_row["close"])
 
 
+def effective_spread(row: pd.Series, default_spread_points: float) -> float:
+    """Spread en puntos para una fila del backtest.
+
+    Si el feature JSON trae columna "spread" con valor > 0, manda ese.
+    Si no, se usa el default pasado por CLI/config. (Antes el parámetro se
+    perdía: la variable local lo sobrescribía siempre con 0.0 cuando la fila
+    no traía spread.)
+    """
+    raw = row.get("spread", None)
+    try:
+        value = float(raw) if raw not in (None, "") else 0.0
+    except (TypeError, ValueError):
+        value = 0.0
+    return value if value > 0 else float(default_spread_points)
+
+
 def run_scenario(
     frames_by_symbol: dict[str, pd.DataFrame],
     config,
@@ -404,6 +431,8 @@ def run_scenario(
     latest_prices: dict[str, float] = {}
     trades_by_day: Counter[str] = Counter()
     symbol_counter: Counter[str] = Counter()
+    # (símbolo, dirección) -> hora del último cierre con pérdida (cooldown live).
+    last_loss_time: dict[tuple[str, str], datetime] = {}
 
     for event_time, symbol, index in event_stream:
         current_time = event_time.to_pydatetime()
@@ -418,6 +447,7 @@ def run_scenario(
             guard=guard,
             symbol_stats_map=symbol_stats_map,
             equity_curve=equity_curve,
+            last_loss_time=last_loss_time,
         )
 
         frame = frames_by_symbol[symbol]
@@ -456,20 +486,42 @@ def run_scenario(
         if decision.signal == "WAIT":
             continue
 
+        # Paridad con live: umbral mínimo de confianza de la IA.
+        if decision.confidence < config.risk.min_confidence:
+            continue
+
+        # Paridad con live: sin apilamiento de posiciones por símbolo.
+        if config.risk.block_symbol_stacking and any(
+            trade.symbol == symbol for trade in open_trades
+        ):
+            continue
+
+        # Paridad con live: cooldown post-loss por símbolo y dirección.
+        cooldown_minutes = config.risk.cooldown_minutes_after_loss
+        if cooldown_minutes > 0:
+            last_loss = last_loss_time.get((symbol, decision.signal))
+            if last_loss is not None and last_loss.tzinfo is None:
+                last_loss = last_loss.replace(tzinfo=timezone.utc)
+            if last_loss is not None and (current_time - last_loss) < timedelta(
+                minutes=cooldown_minutes
+            ):
+                continue
+
         spec = infer_symbol_spec(symbol)
         setup = build_trade_setup(spec, decision.signal, float(current_row["close"]), float(current_row["ATR"]), config.indicators)
         if not setup.valid:
             continue
 
-        spread_points = float(current_row.get("spread", 0.0) or 0.0)
+        spread_pts = effective_spread(current_row, spread_points)
         open_positions = len(open_trades)
         guard_decision = guard.can_open_trade(
             today=current_time.date(),
             balance=balance,
             equity=equity,
             open_positions=open_positions,
-            spread_points=spread_points,
+            spread_points=spread_pts,
             within_session=True,
+            symbol=symbol,
         )
         if not guard_decision.allowed:
             continue
@@ -478,7 +530,7 @@ def run_scenario(
         if not sizing.approved:
             continue
 
-        spread_price = spread_points * spec.point
+        spread_price = spread_pts * spec.point
         slippage_price = slippage_points * spec.point
         entry_price = float(current_row["close"])
         if decision.signal == "BUY":
@@ -614,9 +666,13 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Símbolos a incluir (por defecto: todos los archivos históricos)",
     )
-    parser.add_argument("--spread-points", type=float, default=0.0)
-    parser.add_argument("--commission-per-lot", type=float, default=0.0)
-    parser.add_argument("--slippage-points", type=float, default=0.0)
+    parser.add_argument("--spread-points", type=float, default=20.0,
+                        help="Spread en puntos cuando la fila no trae columna 'spread'. "
+                             "20 pts ≈ 2.0 pips en EURUSD de 5 dígitos (demo típico).")
+    parser.add_argument("--commission-per-lot", type=float, default=0.0,
+                        help="Comisión por lote por operación (ida). Ej: 3.5 ≈ cuenta ECN.")
+    parser.add_argument("--slippage-points", type=float, default=10.0,
+                        help="Deslizamiento en puntos aplicado a la entrada (10 pts ≈ 1 pip).")
     parser.add_argument(
         "--train-ratio",
         type=float,

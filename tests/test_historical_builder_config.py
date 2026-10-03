@@ -4,8 +4,17 @@ from config.loader import load_config
 from pia2.agents.historical_agent.multi_historical_builder import MultiHistoricalBuilder
 
 
+def _load_test_config():
+    # config.yaml es local (no se sube al repo); en CI/clon fresco se usa el ejemplo.
+    from pathlib import Path
+    path = Path("config/config.yaml")
+    if not path.exists():
+        path = Path("config/config.example.yaml")
+    return load_config(str(path))
+
+
 def test_builder_uses_yaml_config_for_indicators_and_thresholds():
-    cfg = load_config("config/config.yaml")
+    cfg = _load_test_config()
     builder = MultiHistoricalBuilder(config=cfg)
 
     rows = []

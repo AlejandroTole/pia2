@@ -8,8 +8,37 @@ version = "2.0.0"
 description = "PIA 2.0 - Agente autónomo de day trading sobre MetaTrader 5"
 requires-python = ">=3.10"
 
-[tool.setuptools.packages.find]
-include = ["pia2*"]
+[tool.setuptools]
+# La raiz del repo ES el paquete `pia2` (no hay subdirectorio pia2/).
+# Esto hace que `pip install -e .` deje `import pia2...` funcionando,
+# que es como importa todo el codigo (main.py, app.py, tests).
+packages = [
+  "pia2",
+  "pia2.agents",
+  "pia2.agents.confluence_agent",
+  "pia2.agents.historical_agent",
+  "pia2.agents.learning_agent",
+  "pia2.agents.market_agent",
+  "pia2.agents.opportunity_agent",
+  "pia2.agents.timeframe_agent",
+  "pia2.agents.trade_setup_agent",
+  "pia2.ai",
+  "pia2.backtesting",
+  "pia2.brokers",
+  "pia2.config",
+  "pia2.core",
+  "pia2.execution",
+  "pia2.intelligence",
+  "pia2.market",
+  "pia2.memory",
+  "pia2.news",
+  "pia2.notify",
+  "pia2.observability",
+  "pia2.risk",
+  "pia2.scheduling",
+  "pia2.strategy",
+]
+package-dir = {pia2 = "."}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

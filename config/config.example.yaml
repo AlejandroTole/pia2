@@ -91,6 +91,7 @@ news:
   enabled: true
   use_filter: true
   use_confidence_adjustment: true
+  fail_open: true   # false = si las noticias fallan, no se opera ese símbolo en el ciclo
   refresh_minutes: 30
   historical_lookback_days: 365
   calendar_scan_days: 2        # limita scraping por ciclo para no bloquear inicio

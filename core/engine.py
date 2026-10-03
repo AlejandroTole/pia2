@@ -131,6 +131,21 @@ class TradingEngine:
         ).strip(" |")
         return analysis
  
+    def _fetch_news_decision(self, symbol: str, now: datetime):
+        """Obtiene la decisión de noticias (puede lanzar si la fuente falla)."""
+        inserted = self.news_service.refresh_if_due(now)
+        if inserted:
+            self._log("INFO", f"news_refresh | inserted={inserted}")
+        news_decision = self.news_service.build_decision(symbol, now)
+        self._log(
+            "DEBUG",
+            (
+                f"{symbol} news | bias={news_decision.historical_bias} "
+                f"conf={news_decision.historical_confidence} block={news_decision.should_block}"
+            ),
+        )
+        return news_decision
+
     def run_symbol(self, symbol: str, now_utc: datetime | None = None) -> CycleResult:
         now = now_utc or datetime.now(timezone.utc)
         result = CycleResult(symbol=symbol)
@@ -176,18 +191,36 @@ class TradingEngine:
         # ---- noticias (actuales + históricas) ----
         news_decision = None
         if self.news_service and self.config.news.enabled:
-            inserted = self.news_service.refresh_if_due(now)
-            if inserted:
-                self._log("INFO", f"news_refresh | inserted={inserted}")
-            news_decision = self.news_service.build_decision(symbol, now)
-            self._log(
-                "DEBUG",
-                (
-                    f"{symbol} news | bias={news_decision.historical_bias} "
-                    f"conf={news_decision.historical_confidence} block={news_decision.should_block}"
-                ),
-            )
-            if news_decision.should_block:
+            try:
+                news_decision = self._fetch_news_decision(symbol, now)
+            except Exception as exc:
+                # Fallo visible y configurable: fail_open sigue sin noticias
+                # (neutral); fail_closed omite el símbolo en este ciclo.
+                fail_open = self.config.news.fail_open
+                self._log(
+                    "WARNING",
+                    f"{symbol} news_error | {exc} | fail_open={fail_open}",
+                )
+                self.observability.record_signal(
+                    symbol=symbol,
+                    timestamp=now,
+                    features={
+                        "trend": interp["trend"],
+                        "momentum": interp["momentum"],
+                        "volatility": interp["volatility"],
+                        "rsi": rsi,
+                        "atr": atr,
+                        "news_error": str(exc),
+                    },
+                    raw_llm_response="",
+                    decision="WAIT",
+                    block_filter="news_error",
+                    latency_ms=0,
+                )
+                if not fail_open:
+                    return self._skip(result, f"Noticias no disponibles: {exc}")
+                news_decision = None
+            if news_decision is not None and news_decision.should_block:
                 self.observability.record_signal(
                     symbol=symbol,
                     timestamp=now,

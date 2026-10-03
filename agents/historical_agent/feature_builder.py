@@ -6,14 +6,14 @@ from typing import Any
 
 import pandas as pd
 
-from pia2.agents.historical_agent.multi_historical_builder import MultiHistoricalBuilder
+from .multi_historical_builder import MultiHistoricalBuilder
 
 
 class HistoricalFeatureBuilder:
-    def __init__(self, output_folder: str = "data/historical/features"):
+    def __init__(self, output_folder: str = "data/historical/features", config=None):
         self.output_folder = output_folder
         os.makedirs(output_folder, exist_ok=True)
-        self.builder = MultiHistoricalBuilder(output_folder=output_folder)
+        self.builder = MultiHistoricalBuilder(output_folder=output_folder, config=config)
 
     def build(self, symbol: str | None = None, candles: int = 500):
         if symbol is None:

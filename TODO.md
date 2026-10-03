@@ -7,6 +7,7 @@
 - [x] FASE 2: validación de ejecución MT5 en regresión (`symbol_select`, metadata del símbolo, `order_check`, `deviation` y `filling_mode`).
   - VERIFICAR EN MT5: validación final con cuenta real, permisos del terminal y respuesta real del broker.
 - [x] Corregir validación de metadata MT5 para usar `trade_stops_level` y `trade_freeze_level`; regresión focalizada 2/2 y conexión verificada con cuenta demo.
+- [x] Aplicar `pia2-fixes.patch`: README, instalación editable, imports, filling mode, failover de noticias y paridad del backtest; `pytest tests -q` pasó.
 - [x] FASE 3: compatibilidad de imports históricos, `config.settings` sin MT5, uso de indicadores del YAML en `MultiHistoricalBuilder`, regla determinista de referencia basada en EMA + RSI + patrón de velas y soporte de eventos manuales estructurados para noticias con timezone UTC-aware.
   - Validación focalizada: 5 tests pasados (builder histórico + compatibilidad + referencia + noticias + config).
   - VERIFICAR EN MT5: descarga/regen del histórico real y validación del calendario de noticias con el terminal real.
