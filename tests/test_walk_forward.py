@@ -129,6 +129,7 @@ def test_simulated_exit_does_not_read_past_fold_boundary(frame):
         frame,
         entry_index=2,
         direction="BUY",
+        entry_price=1.1,
         stop_loss=0.9,
         take_profit=2.0,
         test_until=boundary,

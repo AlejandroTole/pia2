@@ -2,6 +2,14 @@
 
 ---
 
+## 2026-10-05
+
+### Stop a breakeven en el backtest
+
+- Se añadió la opción `--breakeven-atr` para mover el stop a la entrada tras una excursión favorable de N×ATR; está desactivada por defecto.
+- Los reportes ahora pueden distinguir cierres `BE`, preservando la prioridad del SL en la vela de activación y los límites walk-forward.
+- Se añadieron pruebas para activación, salida BE, SL sin activación y comportamiento desactivado.
+
 ## 2026-10-03
 
 ### Motivos de salida del backtest
