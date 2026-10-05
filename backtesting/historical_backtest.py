@@ -915,6 +915,25 @@ def parse_args() -> argparse.Namespace:
         default=1,
         help="Folds walk-forward OOS. 1 = split único clásico; >= 2 = multifold.",
     )
+    parser.add_argument(
+        "--min-confidence",
+        type=float,
+        default=None,
+        help=(
+            "Confianza mínima para operar (default: la de config.yaml). "
+            "Con el mapeo z-score: 60 ≈ |z|>=2, 70 ≈ |z|>=2.33, "
+            "80 ≈ |z|>=2.67."
+        ),
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help=(
+            "Ruta al YAML de config (default: config/config.yaml). Úsalo con "
+            "copias experimentales sin tocar el config de producción."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -923,7 +942,13 @@ def main() -> int:
     # La raíz del repo ES el paquete pia2 (no hay subdirectorio pia2/):
     # este archivo está en <root>/backtesting/, así que parents[1] es la raíz.
     project_root = Path(__file__).resolve().parents[1]
-    config = load_config(project_root / "config" / "config.yaml")
+    config_path = Path(args.config) if args.config else project_root / "config" / "config.yaml"
+    config = load_config(config_path)
+    if args.min_confidence is not None:
+        config = replace(
+            config,
+            risk=replace(config.risk, min_confidence=args.min_confidence),
+        )
 
     frames = load_frames(project_root, args.symbols or config.broker_symbols())
     if not frames:

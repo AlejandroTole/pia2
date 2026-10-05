@@ -4,6 +4,14 @@
 
 ## 2026-10-03
 
+### Herramientas de experimentación
+
+- El CLI de backtest acepta una confianza mínima y ruta de configuración explícitas sin modificar el YAML de producción.
+- Se añadió `tools/measure_spread.py` para medir spread histórico o muestrearlo en vivo desde MT5.
+- `.gitignore` excluye configuraciones `config.exp-*.yaml`.
+
+## 2026-10-03
+
 ### Calibración de confianza del backtest
 
 - La confianza de `build_signal_from_counts` se calcula con el z-score del split BUY/SELL y se añade el valor `z` a la razón de señal.
