@@ -2,6 +2,7 @@
 
 ## Fases pre-demo
 
+- [x] Llevar al motor en vivo la gestión BE/time-stop del champion con modificación/cierre de posiciones por broker, banderas BE persistentes y aislamiento por magic/ticket.
 - [x] Registrar y reportar motivos de salida TP/SL/TIMEOUT por escenario y en el agregado walk-forward.
 - [x] Añadir stop a breakeven opcional por excursión favorable en múltiplos de ATR al backtest y al CLI; conservar los límites temporales OOS.
 - [x] Añadir overrides `--min-confidence` / `--config` al backtest, herramienta MT5 para medir spread y tests de CLI.

@@ -32,7 +32,38 @@ def test_load_valid_config(tmp_path):
     assert config.symbols == ["EURUSD", "XAUUSD"]
     assert config.broker_symbols() == ["EURUSD.PRO", "XAUUSD.PRO"]
     assert config.risk.risk_per_trade_pct == 1.0
+    assert config.risk.breakeven_trigger_atr == 0.5
+    assert config.risk.max_holding_minutes == 60
     assert config.is_real is False
+
+
+def test_live_exit_settings_load_and_validate(tmp_path):
+    path = write_config(tmp_path, """
+        symbols: [EURUSD]
+        risk:
+          breakeven_trigger_atr: 0
+          max_holding_minutes: 0
+    """)
+
+    config = load_config(path)
+
+    assert config.risk.breakeven_trigger_atr == 0
+    assert config.risk.max_holding_minutes == 0
+
+
+@pytest.mark.parametrize(
+    ("risk_setting", "value"),
+    [("breakeven_trigger_atr", -0.1), ("max_holding_minutes", -1)],
+)
+def test_negative_live_exit_settings_raise(tmp_path, risk_setting, value):
+    path = write_config(tmp_path, f"""
+        symbols: [EURUSD]
+        risk:
+          {risk_setting}: {value}
+    """)
+
+    with pytest.raises(ConfigError):
+        load_config(path)
  
  
 def test_real_mode_flag(tmp_path):

@@ -109,7 +109,17 @@ class BrokerInterface(ABC):
  
     @abstractmethod
     def open_positions(self, symbol: str | None = None) -> list[Position]: ...
- 
+
+    @abstractmethod
+    def modify_position_sl(self, ticket: int, stop_loss: float) -> bool:
+        """Mueve el SL de una posición abierta. True si el broker lo aceptó."""
+        ...
+
+    @abstractmethod
+    def close_position(self, ticket: int) -> bool:
+        """Cierra una posición a mercado. True si se cerró."""
+        ...
+
     @abstractmethod
     def place_order(
         self,

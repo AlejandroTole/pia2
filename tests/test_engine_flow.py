@@ -52,6 +52,7 @@ def test_engine_opens_simulated_trade(tmp_path, always_on_config, eurusd_spec, u
     assert trade.take_profit > trade.entry_price   # BUY -> TP arriba
     assert trade.stop_loss < trade.entry_price      # BUY -> SL abajo
     assert trade.volume > 0
+    assert trade.opened_at == now.isoformat(timespec="seconds")
     assert guard.trades_today == 1
     store.close()
  

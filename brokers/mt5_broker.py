@@ -7,7 +7,8 @@ está disponible. En Linux/CI se usa PaperBroker.
 """
  
 from __future__ import annotations
- 
+
+import logging
 from datetime import datetime, timedelta, timezone
  
 import pandas as pd
@@ -21,6 +22,8 @@ from pia2.brokers.base import (
     Tick,
 )
 from pia2.market.instruments import SymbolSpec, normalize_volume, round_price
+
+logger = logging.getLogger(__name__)
 
 
 def select_filling_mode(mt5, filling_flags, trade_execution=None) -> int:
@@ -247,6 +250,78 @@ class MT5Broker(BrokerInterface):
                 )
             )
         return result
+
+    def modify_position_sl(self, ticket: int, stop_loss: float) -> bool:
+        try:
+            mt5 = self._ensure_lib()
+            positions = mt5.positions_get(ticket=ticket)
+            if not positions:
+                return False
+            position = positions[0]
+            result = mt5.order_send({
+                "action": mt5.TRADE_ACTION_SLTP,
+                "position": ticket,
+                "symbol": position.symbol,
+                "sl": float(stop_loss),
+                "tp": position.tp,
+            })
+            if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+                logger.warning(
+                    "No se pudo modificar SL | ticket=%s | respuesta=%s",
+                    ticket,
+                    getattr(result, "comment", None) or mt5.last_error(),
+                )
+                return False
+            return True
+        except Exception:
+            logger.exception("Error modificando SL | ticket=%s", ticket)
+            return False
+
+    def close_position(self, ticket: int) -> bool:
+        try:
+            mt5 = self._ensure_lib()
+            positions = mt5.positions_get(ticket=ticket)
+            if not positions:
+                return False
+            position = positions[0]
+            tick = self.get_tick(position.symbol)
+            info = mt5.symbol_info(position.symbol)
+            if tick is None or info is None:
+                logger.warning(
+                    "No se pudo cerrar posición sin tick/info | ticket=%s",
+                    ticket,
+                )
+                return False
+
+            is_buy_position = position.type == mt5.POSITION_TYPE_BUY
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "position": ticket,
+                "symbol": position.symbol,
+                "volume": position.volume,
+                "type": mt5.ORDER_TYPE_SELL if is_buy_position else mt5.ORDER_TYPE_BUY,
+                "price": tick.bid if is_buy_position else tick.ask,
+                "deviation": self.default_deviation,
+                "magic": position.magic,
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": select_filling_mode(
+                    mt5,
+                    getattr(info, "filling_mode", None),
+                    getattr(info, "trade_exemode", None),
+                ),
+            }
+            result = mt5.order_send(request)
+            if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+                logger.warning(
+                    "No se pudo cerrar posición | ticket=%s | respuesta=%s",
+                    ticket,
+                    getattr(result, "comment", None) or mt5.last_error(),
+                )
+                return False
+            return True
+        except Exception:
+            logger.exception("Error cerrando posición | ticket=%s", ticket)
+            return False
  
     def place_order(
         self,

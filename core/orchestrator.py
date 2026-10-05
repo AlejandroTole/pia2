@@ -160,6 +160,17 @@ class Orchestrator:
                 f"Profit factor: {stats['profit_factor']}"
             )
 
+        try:
+            managed = self.engine.manage_positions(now)
+            if managed["checked"]:
+                self._log(
+                    "DEBUG",
+                    f"positions_managed | checked={managed['checked']} "
+                    f"be_armed={managed['be_armed']} closed={managed['closed']}",
+                )
+        except Exception as exc:
+            self._log("WARNING", f"Error al gestionar posiciones: {exc}")
+
         if self._kill_switch_active():
             self._log("INFO", "kill_switch_active | STOP presente; no se abrirán operaciones")
             return

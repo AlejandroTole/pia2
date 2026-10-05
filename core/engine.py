@@ -93,6 +93,107 @@ class TradingEngine:
         if self.news_service:
             self.news_service.store.close()
 
+    def manage_positions(self, now_utc: datetime | None = None) -> dict[str, int]:
+        """Gestiona BE y time-stop solo para posiciones propias registradas.
+
+        Un fallo queda aislado a su posición. Devuelve contadores de revisadas,
+        BE armados y cierres completados.
+        """
+        result = {"checked": 0, "be_armed": 0, "closed": 0}
+        if not self.config.is_real:
+            return result
+
+        now = now_utc or datetime.now(timezone.utc)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        try:
+            pending_by_ticket = {
+                trade.ticket: trade
+                for trade in self.store.pending()
+                if trade.ticket is not None
+            }
+            positions = [
+                position
+                for position in self.broker.open_positions()
+                if position.magic == self.config.magic_number
+                and position.ticket in pending_by_ticket
+            ]
+        except Exception as exc:
+            self._log(
+                "WARNING",
+                f"No se pudieron consultar posiciones pendientes: {exc}",
+            )
+            return result
+
+        result["checked"] = len(positions)
+        for position in positions:
+            try:
+                trade = pending_by_ticket[position.ticket]
+                tick = self.broker.get_tick(position.symbol)
+                if tick is None:
+                    continue
+
+                be_trigger = self.config.risk.breakeven_trigger_atr
+                atr_entry = float(trade.context.get("atr", 0.0) or 0.0)
+                if (
+                    be_trigger > 0
+                    and atr_entry > 0
+                    and not self.store.is_be_armed(position.ticket)
+                ):
+                    favorable_move = (
+                        tick.bid - trade.entry_price
+                        if position.direction.upper() == "BUY"
+                        else trade.entry_price - tick.ask
+                    )
+                    if favorable_move >= be_trigger * atr_entry:
+                        if self.broker.modify_position_sl(
+                            position.ticket, trade.entry_price
+                        ):
+                            self.store.mark_be_armed(position.ticket)
+                            result["be_armed"] += 1
+                            self._log(
+                                "INFO",
+                                f"Breakeven armado | ticket={position.ticket} "
+                                f"symbol={position.symbol} sl={trade.entry_price}",
+                            )
+                        else:
+                            self._log(
+                                "WARNING",
+                                f"Fallo al mover SL a breakeven | ticket={position.ticket}",
+                            )
+
+                max_holding_minutes = self.config.risk.max_holding_minutes
+                if max_holding_minutes > 0:
+                    if not trade.opened_at:
+                        self._log(
+                            "WARNING",
+                            f"Trade sin opened_at; no se aplica time-stop | "
+                            f"ticket={position.ticket}",
+                        )
+                        continue
+                    opened_at = datetime.fromisoformat(trade.opened_at)
+                    if opened_at.tzinfo is None:
+                        opened_at = opened_at.replace(tzinfo=timezone.utc)
+                    if now - opened_at > timedelta(minutes=max_holding_minutes):
+                        if self.broker.close_position(position.ticket):
+                            result["closed"] += 1
+                            self._log(
+                                "INFO",
+                                f"Time-stop cerró posición | ticket={position.ticket} "
+                                f"symbol={position.symbol}",
+                            )
+                        else:
+                            self._log(
+                                "WARNING",
+                                f"Fallo al cerrar por time-stop | ticket={position.ticket}",
+                            )
+            except Exception as exc:
+                self._log(
+                    "WARNING",
+                    f"Error gestionando posición ticket={position.ticket}: {exc}",
+                )
+        return result
+
     def _apply_candle_policy(self, analysis: Analysis, candle_context: dict) -> Analysis:
         """Ajusta señal/confianza con patrón de velas según configuración."""
         policy = self.config.candle_policy
@@ -494,6 +595,7 @@ class TradingEngine:
                 "bar_time": str(last["time"]) if "time" in df.columns else None,
             },
             ticket=ticket,
+            opened_at=now.isoformat(timespec="seconds"),
         )
         self.store.save_decision(record)
         self.guard.register_trade_opened()

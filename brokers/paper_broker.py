@@ -14,7 +14,7 @@ from pia2.brokers.base import (
     Position,
     Tick,
 )
-from pia2.market.instruments import SymbolSpec
+from pia2.market.instruments import SymbolSpec, money_profit
 
 
 class PaperBroker(BrokerInterface):
@@ -88,6 +88,47 @@ class PaperBroker(BrokerInterface):
         if symbol is None:
             return list(self._positions)
         return [p for p in self._positions if p.symbol == symbol]
+
+    def modify_position_sl(self, ticket: int, stop_loss: float) -> bool:
+        position = next((p for p in self._positions if p.ticket == ticket), None)
+        if position is None:
+            return False
+        position.stop_loss = float(stop_loss)
+        return True
+
+    def close_position(self, ticket: int) -> bool:
+        position = next((p for p in self._positions if p.ticket == ticket), None)
+        if position is None:
+            return False
+        tick = self.get_tick(position.symbol)
+        spec = self.symbol_spec(position.symbol)
+        if tick is None or spec is None:
+            return False
+
+        exit_price = tick.bid if position.direction == "BUY" else tick.ask
+        profit = money_profit(
+            spec,
+            position.direction,
+            position.entry_price,
+            exit_price,
+            position.volume,
+        )
+        self._positions.remove(position)
+        self._closed.append(
+            ClosedDeal(
+                ticket=position.ticket,
+                symbol=position.symbol,
+                direction=position.direction,
+                volume=position.volume,
+                entry_price=position.entry_price,
+                exit_price=exit_price,
+                profit=profit,
+                close_time=tick.time,
+                magic=position.magic,
+            )
+        )
+        self.balance += profit
+        return True
 
     def place_order(
         self,

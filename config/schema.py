@@ -33,6 +33,8 @@ class RiskConfig:
     max_spread_points: float | dict[str, float] = 30.0
     block_symbol_stacking: bool = True
     cooldown_minutes_after_loss: int = 120
+    breakeven_trigger_atr: float = 0.5  # excursión favorable para mover SL a breakeven; 0 = off
+    max_holding_minutes: int = 60  # time-stop; 0 = desactivado
  
  
 @dataclass

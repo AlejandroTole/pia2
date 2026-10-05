@@ -9,9 +9,12 @@ class FakeMT5:
     ORDER_TYPE_BUY = 0
     ORDER_TYPE_SELL = 1
     TRADE_ACTION_DEAL = 0
+    TRADE_ACTION_SLTP = 6
     ORDER_TIME_GTC = 0
     ORDER_FILLING_FOK = 0
     ORDER_FILLING_IOC = 1
+    POSITION_TYPE_BUY = 0
+    POSITION_TYPE_SELL = 1
     SYMBOL_FILLING_FOK = 1
     TRADE_RETCODE_DONE = 10009
 
@@ -19,6 +22,7 @@ class FakeMT5:
         self.selected_symbols = []
         self.sent_requests = []
         self.order_checks = []
+        self._positions = []
         self._account = SimpleNamespace(
             balance=10000.0,
             equity=10000.0,
@@ -70,13 +74,23 @@ class FakeMT5:
     def symbol_info_tick(self, symbol):
         return SimpleNamespace(bid=1.10000, ask=1.10010, time=1700000000)
 
+    def positions_get(self, ticket=None):
+        if ticket is None:
+            return tuple(self._positions)
+        return tuple(position for position in self._positions if position.ticket == ticket)
+
     def order_check(self, request):
         self.order_checks.append(request)
         return SimpleNamespace(retcode=self.TRADE_RETCODE_DONE, comment="OK")
 
     def order_send(self, request):
         self.sent_requests.append(request)
-        return SimpleNamespace(retcode=self.TRADE_RETCODE_DONE, order=42, price=request["price"], comment="OK")
+        return SimpleNamespace(
+            retcode=self.TRADE_RETCODE_DONE,
+            order=42,
+            price=request.get("price", 0.0),
+            comment="OK",
+        )
 
 
 def test_mt5_connect_selects_symbols_and_validates_symbol_metadata(monkeypatch):
@@ -111,3 +125,55 @@ def test_mt5_place_order_uses_symbol_filling_mode_and_configured_deviation():
     assert mt5.sent_requests[0]["deviation"] == 12
     assert mt5.sent_requests[0]["type_filling"] == FakeMT5.ORDER_FILLING_FOK
     assert len(mt5.order_checks) == 1
+
+
+def test_mt5_modify_sl_preserves_current_take_profit_and_rejects_missing_ticket():
+    broker = MT5Broker()
+    mt5 = FakeMT5()
+    mt5._positions.append(SimpleNamespace(
+        ticket=42,
+        symbol="EURUSD.PRO",
+        type=FakeMT5.POSITION_TYPE_BUY,
+        volume=0.25,
+        tp=1.1080,
+        magic=123,
+    ))
+    broker._mt5 = mt5
+
+    assert broker.modify_position_sl(42, 1.1000)
+    assert mt5.sent_requests[0] == {
+        "action": FakeMT5.TRADE_ACTION_SLTP,
+        "position": 42,
+        "symbol": "EURUSD.PRO",
+        "sl": 1.1000,
+        "tp": 1.1080,
+    }
+    assert broker.modify_position_sl(404, 1.1000) is False
+
+
+def test_mt5_close_position_sends_opposite_market_order_for_full_volume():
+    broker = MT5Broker(default_deviation=15)
+    mt5 = FakeMT5()
+    mt5._positions.append(SimpleNamespace(
+        ticket=42,
+        symbol="EURUSD.PRO",
+        type=FakeMT5.POSITION_TYPE_BUY,
+        volume=0.25,
+        tp=1.1080,
+        magic=123,
+    ))
+    broker._mt5 = mt5
+
+    assert broker.close_position(42)
+
+    request = mt5.sent_requests[0]
+    assert request["action"] == FakeMT5.TRADE_ACTION_DEAL
+    assert request["position"] == 42
+    assert request["symbol"] == "EURUSD.PRO"
+    assert request["volume"] == 0.25
+    assert request["type"] == FakeMT5.ORDER_TYPE_SELL
+    assert request["price"] == 1.10000
+    assert request["deviation"] == 15
+    assert request["magic"] == 123
+    assert request["type_filling"] == FakeMT5.ORDER_FILLING_FOK
+    assert broker.close_position(404) is False

@@ -4,6 +4,14 @@
 
 ## 2026-10-05
 
+### Exits de champion en el motor en vivo
+
+- El engine arma BE según ATR de entrada, guarda el flag por ticket en SQLite y aplica el time-stop configurable a posiciones propias registradas.
+- MT5Broker y PaperBroker soportan modificar SL y cerrar posiciones; el orchestrator gestiona exits antes del kill switch para que STOP no desatienda posiciones abiertas.
+- Se configuró localmente `config/config.yaml` con `atr_tp_multiplier: 2.0` para R:R 1:1; `risk.min_confidence` no se modificó. El YAML está ignorado por Git y no se incluye en el commit.
+
+## 2026-10-05
+
 ### Stop a breakeven en el backtest
 
 - Se añadió la opción `--breakeven-atr` para mover el stop a la entrada tras una excursión favorable de N×ATR; está desactivada por defecto.

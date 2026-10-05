@@ -195,6 +195,10 @@ def _validate(config: PIAConfig) -> None:
         raise ConfigError("max_same_currency_exposure debe ser >= 1.")
     if r.cooldown_minutes_after_loss < 0:
         raise ConfigError("cooldown_minutes_after_loss debe ser >= 0.")
+    if r.breakeven_trigger_atr < 0:
+        raise ConfigError("breakeven_trigger_atr debe ser >= 0.")
+    if r.max_holding_minutes < 0:
+        raise ConfigError("max_holding_minutes debe ser >= 0.")
  
     c = config.confluence
     if not 0 <= c.decision_engine_weight <= 1:

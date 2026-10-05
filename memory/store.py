@@ -62,6 +62,10 @@ CREATE TABLE IF NOT EXISTS guard_state (
     trades_today INTEGER NOT NULL DEFAULT 0,
     peak_equity REAL NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS position_flags (
+    ticket INTEGER PRIMARY KEY,
+    be_armed INTEGER NOT NULL DEFAULT 0
+);
 """
  
  
@@ -171,6 +175,23 @@ class TradeStore:
         )
         self._conn.commit()
         return cur.rowcount > 0
+
+    def is_be_armed(self, ticket: int) -> bool:
+        row = self._conn.execute(
+            "SELECT be_armed FROM position_flags WHERE ticket = ?",
+            (ticket,),
+        ).fetchone()
+        return bool(row["be_armed"]) if row is not None else False
+
+    def mark_be_armed(self, ticket: int) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO position_flags (ticket, be_armed) VALUES (?, 1)
+            ON CONFLICT(ticket) DO UPDATE SET be_armed = 1
+            """,
+            (ticket,),
+        )
+        self._conn.commit()
  
     def pending(self, symbol: str | None = None) -> list[TradeRecord]:
         query = "SELECT * FROM trades WHERE status = 'PENDING'"
