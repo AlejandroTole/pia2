@@ -4,6 +4,13 @@
 
 ## 2026-10-03
 
+### Motivos de salida del backtest
+
+- Cada trade simulado registra `TP`, `SL` o `TIMEOUT`; los reportes muestran cantidad, win rate y P/L por motivo, por escenario y agregado OOS.
+- Se añadieron regresiones para los tres tipos de salida y se actualizaron los callers existentes.
+
+## 2026-10-03
+
 ### Herramientas de experimentación
 
 - El CLI de backtest acepta una confianza mínima y ruta de configuración explícitas sin modificar el YAML de producción.

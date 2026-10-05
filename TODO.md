@@ -2,6 +2,7 @@
 
 ## Fases pre-demo
 
+- [x] Registrar y reportar motivos de salida TP/SL/TIMEOUT por escenario y en el agregado walk-forward.
 - [x] Añadir overrides `--min-confidence` / `--config` al backtest, herramienta MT5 para medir spread y tests de CLI.
 - [x] Calibrar la confianza del backtest con z-score, corregir la agregación de drawdown walk-forward y cubrir confianza y métricas.
 - [x] Corregir raíz del CLI de backtest, hacer tests del feature builder independientes de `config.yaml` y añadir walk-forward multifold; verificado con `pytest tests/ -q`.

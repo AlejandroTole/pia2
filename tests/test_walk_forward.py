@@ -125,7 +125,7 @@ def test_n_folds_must_be_positive(frame, config):
 def test_simulated_exit_does_not_read_past_fold_boundary(frame):
     boundary = frame.iloc[6]["time"].to_pydatetime()
 
-    exit_time, exit_price = simulate_exit(
+    exit_time, exit_price, exit_reason = simulate_exit(
         frame,
         entry_index=2,
         direction="BUY",
@@ -136,3 +136,4 @@ def test_simulated_exit_does_not_read_past_fold_boundary(frame):
 
     assert exit_time < boundary
     assert exit_price == float(frame.iloc[5]["close"])
+    assert exit_reason == "TIMEOUT"

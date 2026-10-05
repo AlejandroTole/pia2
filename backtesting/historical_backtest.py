@@ -67,6 +67,7 @@ class OpenTrade:
     take_profit: float
     volume: float
     profit: float
+    exit_reason: str = "UNKNOWN"
 
 
 @dataclass
@@ -87,6 +88,8 @@ class ScenarioResult:
     trades_by_day: dict[str, int] | None = None
     # Curva de equity del escenario (para agregación walk-forward).
     equity_curve: list[float] = field(default_factory=list)
+    # {motivo: {"trades": n, "wins": n, "net": x}}
+    exit_breakdown: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -362,8 +365,12 @@ def simulate_exit(
     stop_loss: float,
     take_profit: float,
     test_until: datetime | None = None,
-) -> tuple[datetime, float]:
-    """Resuelve SL/TP con velas posteriores, priorizando SL en empate."""
+) -> tuple[datetime, float, str]:
+    """Resuelve SL/TP con velas posteriores, priorizando SL en empate.
+
+    Si en las 4 velas siguientes no se toca ni SL ni TP, cierra al close de la
+    4ta vela (time-stop). Devuelve (exit_time, exit_price, exit_reason).
+    """
     last_index = min(entry_index + 4, len(frame) - 1)
     if test_until is not None:
         if test_until.tzinfo is None:
@@ -382,16 +389,16 @@ def simulate_exit(
         low = float(row["low"])
         if direction == "BUY":
             if low <= stop_loss:
-                return row["time"].to_pydatetime(), stop_loss
+                return row["time"].to_pydatetime(), stop_loss, "SL"
             if high >= take_profit:
-                return row["time"].to_pydatetime(), take_profit
+                return row["time"].to_pydatetime(), take_profit, "TP"
         else:
             if high >= stop_loss:
-                return row["time"].to_pydatetime(), stop_loss
+                return row["time"].to_pydatetime(), stop_loss, "SL"
             if low <= take_profit:
-                return row["time"].to_pydatetime(), take_profit
+                return row["time"].to_pydatetime(), take_profit, "TP"
     last_row = frame.iloc[last_index]
-    return last_row["time"].to_pydatetime(), float(last_row["close"])
+    return last_row["time"].to_pydatetime(), float(last_row["close"]), "TIMEOUT"
 
 
 def effective_spread(row: pd.Series, default_spread_points: float) -> float:
@@ -585,7 +592,7 @@ def run_scenario(
             entry_price += spread_price / 2 + slippage_price
         else:
             entry_price -= spread_price / 2 + slippage_price
-        exit_time, exit_price = simulate_exit(
+        exit_time, exit_price, exit_reason = simulate_exit(
             frame,
             index,
             decision.signal,
@@ -608,6 +615,7 @@ def run_scenario(
                 take_profit=setup.take_profit,
                 volume=sizing.volume,
                 profit=profit,
+                exit_reason=exit_reason,
             )
         )
         executed_trades.append(open_trades[-1])
@@ -649,6 +657,16 @@ def run_scenario(
             max_drawdown = max(max_drawdown, ((peak - value) / peak) * 100.0)
 
     average_trades_per_day = total_trades / max(1, len(trades_by_day)) if trades_by_day else 0.0
+    exit_breakdown: dict[str, dict[str, float]] = {}
+    for trade in executed_trades:
+        bucket = exit_breakdown.setdefault(
+            trade.exit_reason,
+            {"trades": 0, "wins": 0, "net": 0.0},
+        )
+        bucket["trades"] += 1
+        bucket["net"] = round(bucket["net"] + trade.profit, 2)
+        if trade.profit > 0:
+            bucket["wins"] += 1
 
     return ScenarioResult(
         max_trades_per_day=max_trades_per_day,
@@ -666,6 +684,7 @@ def run_scenario(
         symbols=dict(symbol_counter),
         trades_by_day=dict(trades_by_day),
         equity_curve=equity_curve,
+        exit_breakdown=exit_breakdown,
     )
 
 
@@ -843,6 +862,21 @@ def print_walk_forward(result: WalkForwardResult, starting_balance: float) -> No
         f"folds+={result.folds_profitable}/{result.n_folds} | "
         f"exp/trade={result.expectancy_per_trade:.2f}"
     )
+    exit_totals: dict[str, dict[str, float]] = {}
+    for fold in result.folds:
+        for reason, stats in fold.result.exit_breakdown.items():
+            bucket = exit_totals.setdefault(reason, {"trades": 0, "wins": 0, "net": 0.0})
+            bucket["trades"] += stats["trades"]
+            bucket["wins"] += stats["wins"]
+            bucket["net"] = round(bucket["net"] + stats["net"], 2)
+    if exit_totals:
+        print("Salidas OOS")
+        for reason, stats in sorted(exit_totals.items()):
+            win_rate = stats["wins"] / stats["trades"] * 100.0 if stats["trades"] else 0.0
+            print(
+                f"  salida {reason}: trades={stats['trades']} "
+                f"win_rate={win_rate:.1f}% net={stats['net']:.2f}"
+            )
 
 
 def load_frames(project_root: Path, symbols: Iterable[str] | None) -> dict[str, pd.DataFrame]:
@@ -873,6 +907,13 @@ def print_result(result: ScenarioResult) -> None:
         f"avg/day={result.average_trades_per_day:>5.2f} | "
         f"symbols={result.symbols}"
     )
+    if result.exit_breakdown:
+        for reason, stats in sorted(result.exit_breakdown.items()):
+            win_rate = stats["wins"] / stats["trades"] * 100.0 if stats["trades"] else 0.0
+            print(
+                f"    salida {reason}: trades={stats['trades']} "
+                f"win_rate={win_rate:.1f}% net={stats['net']:.2f}"
+            )
 
 
 def parse_args() -> argparse.Namespace:
