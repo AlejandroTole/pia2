@@ -16,8 +16,9 @@ Limitaciones conocidas (leer antes de confiar en un resultado):
   XAU) porque los JSON no contienen las specs del broker.
 - Los costos (spread/slippage/comisión) tienen defaults realistas pero son
     aproximados; si el JSON trae columna "spread" por fila, esa manda.
-- Las salidas pueden ser TP, SL, BE o TIMEOUT. El stop a breakeven es
-    experimental y se activa con `--breakeven-atr N` (desactivado por defecto).
+- Las salidas pueden ser TP, SL, BE, TRAIL o TIMEOUT. El stop a breakeven se
+    activa con `--breakeven-atr N` y el trailing con `--trail-atr N`; ambos
+    están desactivados por defecto y son mutuamente excluyentes.
 - La confianza del backtest es `min(100, |z|*30)` sobre el split BUY/SELL
     (significancia estadística, no margen crudo), calibrada para que `|z|=2`
     equivalga a `min_confidence=60`.
@@ -369,15 +370,17 @@ def simulate_exit(
     take_profit: float,
     breakeven_atr_mult: float | None = None,
     atr: float = 0.0,
+    trail_atr_mult: float | None = None,
     test_until: datetime | None = None,
 ) -> tuple[datetime, float, str]:
-    """Resuelve SL/TP/BE con velas posteriores, priorizando SL en empate.
+    """Resuelve SL/TP/BE/TRAIL con velas posteriores, priorizando SL en empate.
 
     Si en las 4 velas siguientes no se toca ni SL ni TP, cierra al close de la
-    4ta vela (time-stop). Con breakeven activado, el stop se mueve al precio de
-    entrada después de una excursión favorable de N×ATR. Devuelve
-    (exit_time, exit_price, exit_reason), donde el motivo es TP, SL, BE o
-    TIMEOUT.
+    4ta vela (time-stop). El stop a breakeven se activa tras una excursión
+    favorable de N×ATR; el trailing sigue el extremo favorable a N×ATR. Si el
+    trailing está activo, breakeven no se arma. Devuelve
+    (exit_time, exit_price, exit_reason), donde el motivo es TP, SL, BE, TRAIL
+    o TIMEOUT.
     """
     last_index = min(entry_index + 4, len(frame) - 1)
     if test_until is not None:
@@ -391,38 +394,71 @@ def simulate_exit(
                 break
             last_index -= 1
 
-    trigger = (
+    breakeven_trigger = (
         breakeven_atr_mult * atr
         if breakeven_atr_mult and atr > 0
         else None
     )
+    trail_distance = (
+        trail_atr_mult * atr
+        if trail_atr_mult and atr > 0
+        else None
+    )
+    use_breakeven = breakeven_trigger is not None and trail_distance is None
     be_armed = False
+    extreme = entry_price
+    trail_stop: float | None = None
     for index in range(entry_index + 1, last_index + 1):
         row = frame.iloc[index]
         high = float(row["high"])
         low = float(row["low"])
-        effective_stop = entry_price if be_armed else stop_loss
         if direction == "BUY":
-            if low <= effective_stop:
-                return (
-                    row["time"].to_pydatetime(),
-                    effective_stop,
-                    "BE" if be_armed else "SL",
+            extreme = max(extreme, high)
+            if trail_distance is not None and extreme - entry_price >= trail_distance:
+                candidate_stop = extreme - trail_distance
+                trail_stop = (
+                    candidate_stop if trail_stop is None
+                    else max(trail_stop, candidate_stop)
                 )
+            if trail_stop is not None:
+                effective_stop, exit_reason = trail_stop, "TRAIL"
+            elif be_armed:
+                effective_stop, exit_reason = entry_price, "BE"
+            else:
+                effective_stop, exit_reason = stop_loss, "SL"
+            if low <= effective_stop:
+                return row["time"].to_pydatetime(), effective_stop, exit_reason
             if high >= take_profit:
                 return row["time"].to_pydatetime(), take_profit, "TP"
-            if trigger is not None and not be_armed and high - entry_price >= trigger:
+            if (
+                use_breakeven
+                and not be_armed
+                and high - entry_price >= breakeven_trigger
+            ):
                 be_armed = True
         else:
-            if high >= effective_stop:
-                return (
-                    row["time"].to_pydatetime(),
-                    effective_stop,
-                    "BE" if be_armed else "SL",
+            extreme = min(extreme, low)
+            if trail_distance is not None and entry_price - extreme >= trail_distance:
+                candidate_stop = extreme + trail_distance
+                trail_stop = (
+                    candidate_stop if trail_stop is None
+                    else min(trail_stop, candidate_stop)
                 )
+            if trail_stop is not None:
+                effective_stop, exit_reason = trail_stop, "TRAIL"
+            elif be_armed:
+                effective_stop, exit_reason = entry_price, "BE"
+            else:
+                effective_stop, exit_reason = stop_loss, "SL"
+            if high >= effective_stop:
+                return row["time"].to_pydatetime(), effective_stop, exit_reason
             if low <= take_profit:
                 return row["time"].to_pydatetime(), take_profit, "TP"
-            if trigger is not None and not be_armed and entry_price - low >= trigger:
+            if (
+                use_breakeven
+                and not be_armed
+                and entry_price - low >= breakeven_trigger
+            ):
                 be_armed = True
     last_row = frame.iloc[last_index]
     return last_row["time"].to_pydatetime(), float(last_row["close"]), "TIMEOUT"
@@ -453,6 +489,7 @@ def run_scenario(
     commission_per_lot: float = 0.0,
     slippage_points: float = 0.0,
     breakeven_atr_mult: float | None = None,
+    trail_atr_mult: float | None = None,
     train_ratio: float = 0.7,
     train_until: datetime | None = None,
     test_until: datetime | None = None,
@@ -629,6 +666,7 @@ def run_scenario(
             setup.take_profit,
             breakeven_atr_mult=breakeven_atr_mult,
             atr=float(current_row["ATR"]),
+            trail_atr_mult=trail_atr_mult,
             test_until=test_until,
         )
         profit = money_profit(spec, decision.signal, entry_price, exit_price, sizing.volume)
@@ -765,6 +803,7 @@ def run_walk_forward(
     commission_per_lot: float = 0.0,
     slippage_points: float = 0.0,
     breakeven_atr_mult: float | None = None,
+    trail_atr_mult: float | None = None,
     train_ratio: float = 0.7,
     n_folds: int = 5,
     min_test_events: int = 10,
@@ -817,6 +856,7 @@ def run_walk_forward(
             commission_per_lot=commission_per_lot,
             slippage_points=slippage_points,
             breakeven_atr_mult=breakeven_atr_mult,
+            trail_atr_mult=trail_atr_mult,
             train_until=test_start,
             test_until=test_until,
         )
@@ -985,6 +1025,13 @@ def parse_args() -> argparse.Namespace:
         "(default: desactivado). Ej: 1.0.",
     )
     parser.add_argument(
+        "--trail-atr",
+        type=float,
+        default=None,
+        help="Trailing stop: tras excursión favorable de N×ATR, el stop sigue al "
+        "extremo a N×ATR (default: desactivado). No combinar con --breakeven-atr.",
+    )
+    parser.add_argument(
         "--train-ratio",
         type=float,
         default=0.7,
@@ -1058,6 +1105,7 @@ def main() -> int:
                 commission_per_lot=args.commission_per_lot,
                 slippage_points=args.slippage_points,
                 breakeven_atr_mult=args.breakeven_atr,
+                trail_atr_mult=args.trail_atr,
                 train_ratio=args.train_ratio,
             )
             results.append(result)
@@ -1072,6 +1120,7 @@ def main() -> int:
                 commission_per_lot=args.commission_per_lot,
                 slippage_points=args.slippage_points,
                 breakeven_atr_mult=args.breakeven_atr,
+                trail_atr_mult=args.trail_atr,
                 train_ratio=args.train_ratio,
                 n_folds=args.folds,
             )

@@ -157,3 +157,66 @@ def test_original_stop_wins_before_breakeven_arms_on_same_candle():
     )
 
     assert reason == "SL" and price == 1.0960
+
+
+def test_trail_activates_and_exits():
+    frame = _frame(
+        [1.1005, 1.1030, 1.1020],
+        [1.0995, 1.1015, 1.1005],
+        [1.1000, 1.1025, 1.1010],
+    )
+
+    _, price, reason = simulate_exit(
+        frame,
+        0,
+        "BUY",
+        1.1000,
+        stop_loss=1.0960,
+        take_profit=1.1040,
+        trail_atr_mult=1.0,
+        atr=0.0020,
+    )
+
+    assert reason == "TRAIL" and price == 1.1010
+
+
+def test_trail_inactive_without_excursion():
+    frame = _frame(
+        [1.1005, 1.1008],
+        [1.0995, 1.0950],
+        [1.1000, 1.0960],
+    )
+
+    _, price, reason = simulate_exit(
+        frame,
+        0,
+        "BUY",
+        1.1000,
+        stop_loss=1.0960,
+        take_profit=1.1040,
+        trail_atr_mult=1.0,
+        atr=0.0020,
+    )
+
+    assert reason == "SL" and price == 1.0960
+
+
+def test_trail_never_moves_against():
+    frame = _frame(
+        [1.1005, 1.1030, 1.1015, 1.1025],
+        [1.0995, 1.1015, 1.1000, 1.1012],
+        [1.1000, 1.1025, 1.1010, 1.1020],
+    )
+
+    _, price, reason = simulate_exit(
+        frame,
+        0,
+        "BUY",
+        1.1000,
+        stop_loss=1.0960,
+        take_profit=1.1040,
+        trail_atr_mult=1.0,
+        atr=0.0020,
+    )
+
+    assert reason == "TRAIL" and price == 1.1010
