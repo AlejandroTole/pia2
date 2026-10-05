@@ -220,3 +220,25 @@ def test_trail_never_moves_against():
     )
 
     assert reason == "TRAIL" and price == 1.1010
+
+
+def test_breakeven_then_trail_takeover():
+    frame = _frame(
+        [1.1005, 1.1012, 1.1025, 1.1018],
+        [1.0995, 1.1002, 1.1010, 1.1000],
+        [1.1000, 1.1008, 1.1020, 1.1005],
+    )
+
+    _, price, reason = simulate_exit(
+        frame,
+        0,
+        "BUY",
+        1.1000,
+        stop_loss=1.0960,
+        take_profit=1.1040,
+        breakeven_atr_mult=0.5,
+        atr=0.0020,
+        trail_atr_mult=1.0,
+    )
+
+    assert reason == "TRAIL" and price == 1.1005

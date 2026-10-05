@@ -377,8 +377,9 @@ def simulate_exit(
 
     Si en las 4 velas siguientes no se toca ni SL ni TP, cierra al close de la
     4ta vela (time-stop). El stop a breakeven se activa tras una excursión
-    favorable de N×ATR; el trailing sigue el extremo favorable a N×ATR. Si el
-    trailing está activo, breakeven no se arma. Devuelve
+    favorable de N×ATR; el trailing sigue el extremo favorable a N×ATR. BE y
+    trailing pueden combinarse: el trailing toma el control cuando se activa.
+    Devuelve
     (exit_time, exit_price, exit_reason), donde el motivo es TP, SL, BE, TRAIL
     o TIMEOUT.
     """
@@ -404,7 +405,7 @@ def simulate_exit(
         if trail_atr_mult and atr > 0
         else None
     )
-    use_breakeven = breakeven_trigger is not None and trail_distance is None
+    use_breakeven = breakeven_trigger is not None
     be_armed = False
     extreme = entry_price
     trail_stop: float | None = None
