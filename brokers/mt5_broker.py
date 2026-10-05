@@ -400,7 +400,8 @@ class MT5Broker(BrokerInterface):
         }
 
         order_check = mt5.order_check(request)
-        if order_check is None or getattr(order_check, "retcode", None) != mt5.TRADE_RETCODE_DONE:
+        # order_check uses retcode 0 for success; TRADE_RETCODE_DONE applies to order_send.
+        if order_check is None or getattr(order_check, "retcode", 0) != 0:
             rejection = order_check
             reason = getattr(order_check, "comment", None) or str(mt5.last_error())
             text = (reason or "").lower()

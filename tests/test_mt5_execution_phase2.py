@@ -82,7 +82,7 @@ class FakeMT5:
 
     def order_check(self, request):
         self.order_checks.append(request)
-        return SimpleNamespace(retcode=self.TRADE_RETCODE_DONE, comment="OK")
+        return SimpleNamespace(retcode=0, comment="OK")
 
     def last_error(self):
         return ("fake error", 0)

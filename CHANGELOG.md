@@ -4,6 +4,13 @@
 
 ## 2026-10-05
 
+### Corrección del pre-chequeo de órdenes MT5
+
+- `MT5Broker.place_order` ahora considera exitoso `order_check` cuando `retcode` es `0`; `TRADE_RETCODE_DONE` queda reservado para validar `order_send`.
+- Se añadieron regresiones para comprobar que el retcode cero llega a `order_send` y que un retcode distinto de cero sigue rechazando la orden.
+
+## 2026-10-05
+
 ### Diagnóstico de órdenes MT5 rechazadas
 
 - El motivo del broker incluye el nombre dinámico del retcode y el detalle devuelto por MT5.

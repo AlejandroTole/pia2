@@ -21,6 +21,7 @@ Estado operativo reciente:
 - El backtest identifica cierres `TP`, `SL`, `BE` y `TIMEOUT`, y muestra su desglose por escenario y agregado OOS; el stop a breakeven es opcional mediante `--breakeven-atr`.
 - El motor en vivo gestiona BE y time-stop en posiciones propias registradas; la bandera BE persiste por ticket en SQLite. La configuración local ignorada por Git usa `atr_tp_multiplier: 2.0` para R:R 1:1 sin cambiar `risk.min_confidence`.
 - Los rechazos de MT5 reportan el nombre del retcode y el engine muestra una sola vez el prefijo del rechazo.
+- `MT5Broker.place_order` interpreta correctamente `order_check` con `retcode == 0` como éxito y reserva `TRADE_RETCODE_DONE` para la respuesta de `order_send`; cubierto por regresión.
 - El CLI de backtest acepta `--min-confidence` y `--config` para pruebas aisladas; se añadió `tools/measure_spread.py` para medir spread en MT5.
 - FASE 0 de seguridad completada para preparar la prueba demo.
 - FASE 1 de integridad de prueba completada.
