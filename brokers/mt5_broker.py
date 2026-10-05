@@ -50,6 +50,21 @@ def select_filling_mode(mt5, filling_flags, trade_execution=None) -> int:
     return mt5.ORDER_FILLING_IOC
 
 
+def _retcode_name(mt5, retcode: int | None) -> str:
+    """Nombre del TRADE_RETCODE_* de MT5 sin fijar códigos numéricos."""
+    for name in dir(mt5):
+        if name.startswith("TRADE_RETCODE_") and getattr(mt5, name) == retcode:
+            return name.replace("TRADE_RETCODE_", "")
+    return f"UNKNOWN({retcode})"
+
+
+def _order_rejection_reason(mt5, result) -> str:
+    retcode = getattr(result, "retcode", None)
+    code = _retcode_name(mt5, retcode)
+    detail = getattr(result, "comment", "") or str(mt5.last_error())
+    return f"Orden rechazada [{code}]: {detail}".strip()
+
+
 class MT5Broker(BrokerInterface):
     def __init__(
         self,
@@ -386,23 +401,33 @@ class MT5Broker(BrokerInterface):
 
         order_check = mt5.order_check(request)
         if order_check is None or getattr(order_check, "retcode", None) != mt5.TRADE_RETCODE_DONE:
+            rejection = order_check
             reason = getattr(order_check, "comment", None) or str(mt5.last_error())
             text = (reason or "").lower()
             if "requote" in text or "off quote" in text or "off quotes" in text:
                 result = mt5.order_send(request)
                 if result is not None and result.retcode == mt5.TRADE_RETCODE_DONE:
                     return OrderResult(ok=True, ticket=result.order, price=result.price)
-            return OrderResult(ok=False, reason=f"Orden rechazada: {reason}")
+                rejection = result
+            return OrderResult(
+                ok=False,
+                reason=_order_rejection_reason(mt5, rejection),
+            )
 
         result = mt5.order_send(request)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+            rejection = result
             reason = getattr(result, "comment", None) or str(mt5.last_error())
             text = (reason or "").lower()
             if "requote" in text or "off quote" in text or "off quotes" in text:
                 result = mt5.order_send(request)
                 if result is not None and result.retcode == mt5.TRADE_RETCODE_DONE:
                     return OrderResult(ok=True, ticket=result.order, price=result.price)
-            return OrderResult(ok=False, reason=f"Orden rechazada: {reason}")
+                rejection = result
+            return OrderResult(
+                ok=False,
+                reason=_order_rejection_reason(mt5, rejection),
+            )
 
         return OrderResult(ok=True, ticket=result.order, price=result.price)
 

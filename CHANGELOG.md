@@ -4,6 +4,14 @@
 
 ## 2026-10-05
 
+### Diagnóstico de órdenes MT5 rechazadas
+
+- El motivo del broker incluye el nombre dinámico del retcode y el detalle devuelto por MT5.
+- El engine evita repetir el prefijo `Orden rechazada` en el motivo final de la señal.
+- Se agregaron regresiones para el retcode de orden y el formato final reportado al usuario.
+
+## 2026-10-05
+
 ### Exits de champion en el motor en vivo
 
 - El engine arma BE según ATR de entrada, guarda el flag por ticket en SQLite y aplica el time-stop configurable a posiciones propias registradas.

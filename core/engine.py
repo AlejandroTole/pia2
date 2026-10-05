@@ -552,7 +552,13 @@ class TradingEngine:
                     status="REJECTED",
                     comment=order.reason,
                 )
-                return self._skip(result, f"Orden rechazada: {order.reason}")
+                base = order.reason or "sin detalle"
+                reason = (
+                    base
+                    if base.startswith("Orden rechazada")
+                    else f"Orden rechazada: {base}"
+                )
+                return self._skip(result, reason)
             ticket = order.ticket
             entry_price = order.price or setup.entry
         else:

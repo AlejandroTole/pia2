@@ -17,6 +17,7 @@ class FakeMT5:
     POSITION_TYPE_SELL = 1
     SYMBOL_FILLING_FOK = 1
     TRADE_RETCODE_DONE = 10009
+    TRADE_RETCODE_MARKET_CLOSED = 10018
 
     def __init__(self):
         self.selected_symbols = []
@@ -82,6 +83,9 @@ class FakeMT5:
     def order_check(self, request):
         self.order_checks.append(request)
         return SimpleNamespace(retcode=self.TRADE_RETCODE_DONE, comment="OK")
+
+    def last_error(self):
+        return ("fake error", 0)
 
     def order_send(self, request):
         self.sent_requests.append(request)
@@ -177,3 +181,25 @@ def test_mt5_close_position_sends_opposite_market_order_for_full_volume():
     assert request["magic"] == 123
     assert request["type_filling"] == FakeMT5.ORDER_FILLING_FOK
     assert broker.close_position(404) is False
+
+
+def test_mt5_order_rejection_includes_retcode_name_and_detail():
+    broker = MT5Broker()
+    mt5 = FakeMT5()
+    mt5.order_check = lambda request: SimpleNamespace(
+        retcode=mt5.TRADE_RETCODE_MARKET_CLOSED,
+        comment="Market closed",
+    )
+    broker._mt5 = mt5
+
+    result = broker.place_order(
+        symbol="EURUSD.PRO",
+        direction="BUY",
+        volume=0.1,
+        stop_loss=1.0990,
+        take_profit=1.1020,
+        magic=123,
+    )
+
+    assert result.ok is False
+    assert result.reason == "Orden rechazada [MARKET_CLOSED]: Market closed"
