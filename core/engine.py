@@ -129,6 +129,34 @@ class TradingEngine:
         for position in positions:
             try:
                 trade = pending_by_ticket[position.ticket]
+
+                max_holding_minutes = self.config.risk.max_holding_minutes
+                if max_holding_minutes > 0:
+                    if not trade.opened_at:
+                        self._log(
+                            "WARNING",
+                            f"Trade sin opened_at; no se aplica time-stop | "
+                            f"ticket={position.ticket}",
+                        )
+                    else:
+                        opened_at = datetime.fromisoformat(trade.opened_at)
+                        if opened_at.tzinfo is None:
+                            opened_at = opened_at.replace(tzinfo=timezone.utc)
+                        if now - opened_at > timedelta(minutes=max_holding_minutes):
+                            if self.broker.close_position(position.ticket):
+                                result["closed"] += 1
+                                self._log(
+                                    "INFO",
+                                    f"Time-stop cerró posición | ticket={position.ticket} "
+                                    f"symbol={position.symbol}",
+                                )
+                            else:
+                                self._log(
+                                    "WARNING",
+                                    f"Fallo al cerrar por time-stop | ticket={position.ticket}",
+                                )
+                            continue
+
                 tick = self.broker.get_tick(position.symbol)
                 if tick is None:
                     continue
@@ -160,32 +188,6 @@ class TradingEngine:
                             self._log(
                                 "WARNING",
                                 f"Fallo al mover SL a breakeven | ticket={position.ticket}",
-                            )
-
-                max_holding_minutes = self.config.risk.max_holding_minutes
-                if max_holding_minutes > 0:
-                    if not trade.opened_at:
-                        self._log(
-                            "WARNING",
-                            f"Trade sin opened_at; no se aplica time-stop | "
-                            f"ticket={position.ticket}",
-                        )
-                        continue
-                    opened_at = datetime.fromisoformat(trade.opened_at)
-                    if opened_at.tzinfo is None:
-                        opened_at = opened_at.replace(tzinfo=timezone.utc)
-                    if now - opened_at > timedelta(minutes=max_holding_minutes):
-                        if self.broker.close_position(position.ticket):
-                            result["closed"] += 1
-                            self._log(
-                                "INFO",
-                                f"Time-stop cerró posición | ticket={position.ticket} "
-                                f"symbol={position.symbol}",
-                            )
-                        else:
-                            self._log(
-                                "WARNING",
-                                f"Fallo al cerrar por time-stop | ticket={position.ticket}",
                             )
             except Exception as exc:
                 self._log(

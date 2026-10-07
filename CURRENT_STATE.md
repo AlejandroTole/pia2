@@ -4,7 +4,7 @@
 
 Septiembre 2026
 
-Actualizado: 2026-10-03
+Actualizado: 2026-10-07
 
 ---
 
@@ -36,6 +36,8 @@ Estado operativo reciente:
 - Gestión de riesgo reforzada para evitar reentradas consecutivas en el mismo símbolo.
 - Sizing por margen estimado (dependiente de leverage) en lugar de freno por nocional.
 - VERIFICAR EN MT5: comportamiento real con cuenta demo/live, permisos del terminal, `filling_mode`, fuentes de noticias y respuestas del servidor.
+- La salida de consola de `main.py` se conserva en `logs/pia2.log` con rotación (5 MB, 3 respaldos); el watchdog Windows reinicia crashes y se detiene tras 5 en 10 minutos.
+- Al conectar, el orquestador hace un barrido explícito de posiciones; el time-stop comprueba vencidas antes de solicitar ticks, incluso sin cotización disponible.
 
 ---
 

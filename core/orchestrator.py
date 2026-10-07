@@ -119,7 +119,9 @@ class Orchestrator:
                 self.guard.local_date(datetime.now(timezone.utc)),
                 account.balance,
             )
- 
+
+        self._manage_positions(datetime.now(timezone.utc))
+
         while self._running:
             started = datetime.now(timezone.utc)
             try:
@@ -134,7 +136,19 @@ class Orchestrator:
         if hasattr(self.engine, "close"):
             self.engine.close()
         self._log("INFO", "PIA 2.0 detenido.")
- 
+
+    def _manage_positions(self, now: datetime) -> None:
+        try:
+            managed = self.engine.manage_positions(now)
+            if managed["checked"]:
+                self._log(
+                    "DEBUG",
+                    f"positions_managed | checked={managed['checked']} "
+                    f"be_armed={managed['be_armed']} closed={managed['closed']}",
+                )
+        except Exception as exc:
+            self._log("WARNING", f"Error al gestionar posiciones: {exc}")
+
     def _tick(self) -> None:
         self._tick_seq += 1
         if not self.broker.is_connected():
@@ -160,16 +174,7 @@ class Orchestrator:
                 f"Profit factor: {stats['profit_factor']}"
             )
 
-        try:
-            managed = self.engine.manage_positions(now)
-            if managed["checked"]:
-                self._log(
-                    "DEBUG",
-                    f"positions_managed | checked={managed['checked']} "
-                    f"be_armed={managed['be_armed']} closed={managed['closed']}",
-                )
-        except Exception as exc:
-            self._log("WARNING", f"Error al gestionar posiciones: {exc}")
+        self._manage_positions(now)
 
         if self._kill_switch_active():
             self._log("INFO", "kill_switch_active | STOP presente; no se abrirán operaciones")

@@ -2,6 +2,15 @@
 
 ---
 
+## 2026-10-07
+
+### Recuperación ante crashes y time-stop al arrancar
+
+- `main.py` duplica la salida de consola a `logs/pia2.log` con timestamps y rotación de 5 MB con 3 respaldos.
+- Se añadió `scripts/run_watchdog.ps1`: reinicia tras una salida no limpia con 30 segundos de espera, respeta la salida limpia y se detiene al quinto crash en 10 minutos.
+- El orquestador barre posiciones justo después de conectar; el engine evalúa el time-stop antes de pedir el tick, de modo que puede cerrar de inmediato trades vencidos aunque no haya cotización. Se cubrió el arranque y una posición de 96 minutos.
+- No se modificaron parámetros de trading.
+
 ## 2026-10-05
 
 ### Corrección del pre-chequeo de órdenes MT5

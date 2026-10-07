@@ -2,6 +2,7 @@
 
 ## Fases pre-demo
 
+- [x] Añadir log persistente de stdout/stderr con rotación y watchdog Windows con límite de reinicios; garantizar que el barrido inicial cierra time-stops vencidos incluso sin tick.
 - [x] Corregir la validación MT5: `order_check` usa retcode `0` para éxito; mantener `TRADE_RETCODE_DONE` para `order_send` y cubrir ambos caminos con regresiones.
 - [x] Añadir código MT5 al diagnóstico de rechazos y evitar duplicar su prefijo en el engine.
 - [x] Llevar al motor en vivo la gestión BE/time-stop del champion con modificación/cierre de posiciones por broker, banderas BE persistentes y aislamiento por magic/ticket.

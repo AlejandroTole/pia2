@@ -42,6 +42,8 @@ TradeStore + ObservabilityStore
 - `pia2/memory/store.py` guarda trades y estado del guard.
 - `pia2/observability/store.py` guarda señales, órdenes y snapshots.
 - `pia2/notify/base.py` maneja logs rotativos y notificaciones.
+- `main.py` copia todo `stdout` y `stderr` a `logs/pia2.log` con rotación de 5 MB y 3 respaldos.
+- `scripts/run_watchdog.ps1` reinicia el proceso ante salidas no limpias, con límite de 5 crashes en 10 minutos.
 
 ---
 

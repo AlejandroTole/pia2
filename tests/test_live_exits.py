@@ -168,6 +168,18 @@ def test_timeout_closes_position_opened_two_hours_ago(store):
     assert broker.close_calls == [10]
 
 
+def test_startup_timeout_closes_96_minute_position_without_tick(store):
+    now = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)
+    broker = FakeBroker([_position()], {})
+    _save_trade(store, opened_at=(now - timedelta(minutes=96)).isoformat())
+
+    result = _engine(store, broker, be_trigger=0).manage_positions(now)
+
+    assert result == {"checked": 1, "be_armed": 0, "closed": 1}
+    assert broker.close_calls == [10]
+    assert broker.modify_calls == []
+
+
 def test_ignores_other_magic_and_unregistered_tickets(store):
     now = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)
     broker = FakeBroker(
@@ -288,6 +300,38 @@ def test_orchestrator_manages_positions_before_kill_switch(monkeypatch):
     orchestrator._tick()
 
     assert events == ["reconcile", "manage", "kill"]
+
+
+def test_orchestrator_sweeps_positions_immediately_after_connect(monkeypatch):
+    events = []
+    broker = SimpleNamespace(
+        is_connected=lambda: True,
+        account=lambda: None,
+        disconnect=lambda: events.append("disconnect"),
+    )
+    engine = SimpleNamespace()
+    notifier = SilentNotifier()
+    orchestrator = Orchestrator(
+        PIAConfig(execution="broker"),
+        broker,
+        engine,
+        object(),
+        object(),
+        notifier,
+    )
+
+    def manage_positions(now):
+        assert now.tzinfo is not None
+        events.append("startup_sweep")
+        orchestrator._running = False
+        return {"checked": 1, "be_armed": 0, "closed": 1}
+
+    engine.manage_positions = manage_positions
+    monkeypatch.setattr(orchestrator, "_install_signals", lambda: None)
+
+    orchestrator.run()
+
+    assert events == ["startup_sweep", "disconnect"]
 
 
 def test_orchestrator_catches_manager_exception(monkeypatch):
