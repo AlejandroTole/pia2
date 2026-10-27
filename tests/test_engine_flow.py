@@ -131,3 +131,29 @@ def test_reconcile_demo_closes_loss(tmp_path, always_on_config, eurusd_spec):
     assert done[0].status == "LOSS"
     assert round(done[0].profit, 2) == -200.0  # -0.0020 * 100000... -> 200 ticks * 1.0
     store.close()
+
+def test_no_tick_skips_before_guard_and_order(
+    tmp_path, always_on_config, eurusd_spec, uptrend_candles
+):
+    broker = build_broker(eurusd_spec, uptrend_candles)
+    broker.get_tick = lambda symbol: None
+    orders = []
+    broker.place_order = lambda *a, **k: orders.append((a, k))
+    store = TradeStore(str(tmp_path / "pia.db"))
+    guard = RiskGuard(always_on_config.risk)
+    guard.start_day(date(2026, 7, 17), 10000)
+    guard_calls = []
+    original = guard.can_open_trade
+    guard.can_open_trade = lambda *a, **k: guard_calls.append(1) or original(*a, **k)
+
+    analyst = TradingAnalyst(FakeClient('{"signal":"BUY","confidence":80,"reason":"tendencia"}'))
+    engine = TradingEngine(always_on_config, broker, analyst, store, guard, SilentNotifier())
+
+    result = engine.run_symbol("EURUSD", datetime(2026, 7, 17, 10, 0, tzinfo=timezone.utc))
+
+    assert result.executed is False
+    assert result.reason == "Sin tick"
+    assert guard_calls == []
+    assert orders == []
+    assert store.pending("EURUSD") == []
+    store.close()

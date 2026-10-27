@@ -182,3 +182,28 @@ def test_unknown_config_keys_warn(tmp_path):
     """)
     with pytest.warns(UserWarning, match="not_a_real_key"):
         load_config(path)
+
+def test_is_real_depends_only_on_execution():
+    from config.schema import PIAConfig
+
+    assert PIAConfig(mode="real", execution="simulated").is_real is False
+    assert PIAConfig(mode="demo", execution="broker").is_real is True
+
+
+def test_v1_real_mode_translates_to_broker_execution(tmp_path):
+    path = write_config(tmp_path, """
+        mode: real
+        symbols: [EURUSD]
+    """)
+    config = load_config(path)
+    assert config.execution == "broker"
+    assert config.is_real is True
+
+
+def test_explicit_simulated_execution_wins_over_real_mode(tmp_path):
+    path = write_config(tmp_path, """
+        mode: real
+        execution: simulated
+        symbols: [EURUSD]
+    """)
+    assert load_config(path).is_real is False

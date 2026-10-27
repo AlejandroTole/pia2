@@ -469,7 +469,9 @@ class TradingEngine:
             return self._skip(result, "Sin información de cuenta")
  
         tick = self.broker.get_tick(symbol)
-        spread_points = (tick.spread_points / spec.point) if (tick and spec.point) else 0.0
+        if tick is None:
+            return self._skip(result, "Sin tick")
+        spread_points = (tick.spread_points / spec.point) if spec.point else 0.0
         current_positions = self.broker.open_positions()
         if not self.config.is_real:
             current_positions = current_positions + [

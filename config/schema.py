@@ -159,7 +159,7 @@ class PIAConfig:
     @property
     def is_real(self) -> bool:
         """True si PIA debe enviar órdenes reales al broker."""
-        return self.execution == "broker" or self.mode == "real"
+        return self.execution == "broker"
  
     def broker_symbols(self) -> list[str]:
         """Símbolos tal como los espera el broker (con sufijo aplicado)."""
