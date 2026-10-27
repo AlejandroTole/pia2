@@ -443,6 +443,11 @@ class MT5Broker(BrokerInterface):
             return []
         if deals is None:
             return []
+        # Deals de entrada por posición: dan precio/hora de apertura y sus costos.
+        entries = {}
+        for d in deals:
+            if getattr(d, "entry", None) == mt5.DEAL_ENTRY_IN:
+                entries.setdefault(d.position_id, d)
         result = []
         for d in deals:
             # DEAL_ENTRY_OUT marca el cierre de una posición.
@@ -450,6 +455,9 @@ class MT5Broker(BrokerInterface):
                 continue
             if magic is not None and d.magic != magic:
                 continue
+            entry = entries.get(d.position_id)
+            entry_commission = float(getattr(entry, "commission", 0.0) or 0.0) if entry else 0.0
+            entry_fee = float(getattr(entry, "fee", 0.0) or 0.0) if entry else 0.0
             direction = "SELL" if d.type == mt5.DEAL_TYPE_BUY else "BUY"
             result.append(
                 ClosedDeal(
@@ -457,14 +465,17 @@ class MT5Broker(BrokerInterface):
                     symbol=d.symbol,
                     direction=direction,
                     volume=d.volume,
-                    entry_price=0.0,
+                    entry_price=float(entry.price) if entry else 0.0,
                     exit_price=d.price,
                     profit=d.profit,
                     close_time=datetime.fromtimestamp(d.time, tz=timezone.utc),
                     magic=d.magic,
-                    commission=float(getattr(d, "commission", 0.0) or 0.0),
+                    commission=float(getattr(d, "commission", 0.0) or 0.0) + entry_commission,
                     swap=float(getattr(d, "swap", 0.0) or 0.0),
-                    fee=float(getattr(d, "fee", 0.0) or 0.0),
+                    fee=float(getattr(d, "fee", 0.0) or 0.0) + entry_fee,
+                    open_time=(
+                        datetime.fromtimestamp(entry.time, tz=timezone.utc) if entry else None
+                    ),
                 )
             )
         return result

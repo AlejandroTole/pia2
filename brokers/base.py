@@ -80,7 +80,7 @@ class ClosedDeal:
     commission: float = 0.0
     swap: float = 0.0
     fee: float = 0.0
- 
+    open_time: datetime | None = None 
  
 class BrokerInterface(ABC):
     """Contrato mínimo que debe cumplir cualquier broker usado por PIA."""

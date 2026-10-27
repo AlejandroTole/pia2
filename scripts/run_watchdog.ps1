@@ -20,10 +20,24 @@ function Write-WatchdogLog {
 
 $crashes = [System.Collections.Generic.Queue[datetime]]::new()
 Set-Location $repoRoot
+$venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path -LiteralPath $venvPython)) {
+    $message = "Falta el entorno virtual: no existe $venvPython. Cree .venv e instale las dependencias antes de usar el watchdog."
+    Write-WatchdogLog $message
+    Write-Error $message
+    exit 1
+}
+
+# UTF-8 para el proceso hijo: evita que los emojis rompan la salida en cp1252.
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
+[Console]::OutputEncoding = $utf8WithoutBom
+$OutputEncoding = $utf8WithoutBom
+
 Write-WatchdogLog "Supervisor iniciado."
 
 while ($true) {
-    & python main.py
+    & $venvPython main.py
     $exitCode = $LASTEXITCODE
 
     if ($exitCode -eq 0) {

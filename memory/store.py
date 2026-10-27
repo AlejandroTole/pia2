@@ -168,6 +168,75 @@ class TradeStore:
         self._conn.commit()
         return cur.rowcount > 0
 
+    def has_ticket(self, ticket: int) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM trades WHERE ticket = ? LIMIT 1", (ticket,)
+        ).fetchone()
+        return row is not None
+
+    def insert_closed_trade(
+        self,
+        ticket: int,
+        symbol: str,
+        direction: str,
+        volume: float,
+        entry_price: float,
+        exit_price: float,
+        profit: float,
+        status: str,
+        closed_at: str,
+        opened_at: str = "",
+        reason: str = "",
+        context: dict | None = None,
+    ) -> bool:
+        """Inserta un trade ya cerrado que no existía localmente (idempotente por ticket)."""
+        if self.has_ticket(ticket):
+            return False
+        self._conn.execute(
+            """
+            INSERT INTO trades (symbol, direction, confidence, entry_price, stop_loss,
+                take_profit, volume, reason, context, ticket, status, exit_price,
+                profit, opened_at, closed_at)
+            VALUES (?, ?, 0, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                symbol, direction, entry_price, volume, reason,
+                json.dumps(context or {}, ensure_ascii=False),
+                ticket, status, exit_price, profit, opened_at or None, closed_at,
+            ),
+        )
+        self._conn.commit()
+        return True
+
+    def resolve_unknown_by_ticket(
+        self, ticket: int, status: str, exit_price: float, profit: float, closed_at: str,
+    ) -> bool:
+        """Da resultado real a una fila marcada UNKNOWN cuando el deal aparece después."""
+        cur = self._conn.execute(
+            """
+            UPDATE trades SET status = ?, exit_price = ?, profit = ?, closed_at = ?
+            WHERE ticket = ? AND status = 'UNKNOWN'
+            """,
+            (status, exit_price, profit, closed_at, ticket),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    def correct_closed_by_ticket(
+        self, ticket: int, status: str, exit_price: float, profit: float, closed_at: str,
+    ) -> bool:
+        """Reparación: alinea una fila ya cerrada con el deal real si difiere."""
+        cur = self._conn.execute(
+            """
+            UPDATE trades SET status = ?, exit_price = ?, profit = ?, closed_at = ?
+            WHERE ticket = ? AND status IN ('WIN', 'LOSS', 'BREAKEVEN')
+              AND (status != ? OR ABS(profit - ?) > 0.005)
+            """,
+            (status, exit_price, profit, closed_at, ticket, status, profit),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
     def mark_unknown_by_ticket(self, ticket: int) -> bool:
         cur = self._conn.execute(
             "UPDATE trades SET status = 'UNKNOWN' WHERE ticket = ? AND status = 'PENDING'",

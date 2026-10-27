@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
  
 from pia2.core.engine import TradingEngine
-from pia2.core.reconciler import reconcile
+from pia2.core.reconciler import backfill_history, reconcile
 from pia2.scheduling.clock import within_session
  
  
@@ -112,7 +112,9 @@ class Orchestrator:
  
         if not self._connect_with_retry():
             return
- 
+
+        self._backfill_history()
+
         account = self.broker.account()
         if account is not None:
             self.guard.start_day(
@@ -136,6 +138,23 @@ class Orchestrator:
         if hasattr(self.engine, "close"):
             self.engine.close()
         self._log("INFO", "PIA 2.0 detenido.")
+
+    def _backfill_history(self) -> None:
+        """Repara el contador local con todo el historial de deals del broker."""
+        if not self.config.is_real:
+            return
+        try:
+            added = backfill_history(self.config, self.broker, self.store, self.guard)
+        except Exception as exc:
+            self._log("WARNING", f"Error en backfill de historial: {exc}")
+            return
+        stats = self.store.stats()
+        self._log(
+            "INFO",
+            f"backfill_historial | recuperadas={added} | cerradas={stats['total_trades']} | "
+            f"Win rate: {stats['win_rate']}% | Neto: {stats['net_profit']} | "
+            f"Profit factor: {stats['profit_factor']}",
+        )
 
     def _manage_positions(self, now: datetime) -> None:
         try:

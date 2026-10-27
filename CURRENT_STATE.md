@@ -4,7 +4,9 @@
 
 Septiembre 2026
 
-Actualizado: 2026-10-07
+Actualizado: 2026-10-27
+
+Contador de stats: `TradeStore.stats()` se reconstruye desde el historial de deals de MT5 al arrancar (backfill desde 2026-10-05) y el reconciliador inserta deals sin fila local. Lanzamiento: `scripts/run_watchdog.ps1` usa `.venv` y UTF-8.
 
 ---
 

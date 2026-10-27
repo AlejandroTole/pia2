@@ -2,6 +2,17 @@
 
 ---
 
+## 2026-10-27
+
+### Contador de estadísticas alineado con el historial de MT5
+
+- `core/reconciler.py`: los deals del bot (por `magic_number`) sin fila local se insertan como trades cerrados; las filas `UNKNOWN` se resuelven con su deal real; los cierres parciales de una posición se unen. El resultado es profit + comisión + swap + fee.
+- Nuevo `backfill_history` (desde 2026-10-05), ejecutado al arrancar en modo real; también corrige filas cerradas que difieren del deal.
+- `brokers/mt5_broker.py` y `brokers/base.py`: el deal incluye precio/hora de apertura y la comisión del deal de entrada.
+- `memory/store.py`: `has_ticket`, `insert_closed_trade`, `resolve_unknown_by_ticket`, `correct_closed_by_ticket`.
+- `scripts/run_watchdog.ps1`: usa `.venv\Scripts\python.exe` (falla con mensaje claro si falta) y fija UTF-8 para el proceso hijo.
+- Tests nuevos en `tests/test_reconciliation_backfill.py`. No se modificaron parámetros de trading ni el kill-switch.
+
 ## 2026-10-07
 
 ### Recuperación ante crashes y time-stop al arrancar

@@ -2,6 +2,7 @@
 
 ## Fases pre-demo
 
+- [x] Alinear el contador de stats con el historial de MT5 (insertar deals sin fila, resolver UNKNOWN, backfill al arrancar) y arreglar el lanzamiento del watchdog (venv + UTF-8).
 - [x] Añadir log persistente de stdout/stderr con rotación y watchdog Windows con límite de reinicios; garantizar que el barrido inicial cierra time-stops vencidos incluso sin tick.
 - [x] Corregir la validación MT5: `order_check` usa retcode `0` para éxito; mantener `TRADE_RETCODE_DONE` para `order_send` y cubrir ambos caminos con regresiones.
 - [x] Añadir código MT5 al diagnóstico de rechazos y evitar duplicar su prefijo en el engine.
